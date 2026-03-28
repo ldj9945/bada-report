@@ -172,6 +172,36 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .prog-fill{height:100%;background:var(--primary);border-radius:10px;transition:width .3s;}
 .prog-lbl{font-size:12px;color:var(--muted);text-align:center;}
 </style>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyCv_wrTuOhLQIDKOx_WGEzsW5N-hTicPLY",
+      authDomain: "bada-report.firebaseapp.com",
+      projectId: "bada-report",
+      storageBucket: "bada-report.firebasestorage.app",
+      messagingSenderId: "620314337665",
+      appId: "1:620314337665:web:2795743a69975af37a8880"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // ── Firebase sync helpers ──
+    window._db = db;
+    window._fbSetDoc = setDoc;
+    window._fbGetDoc = getDoc;
+    window._fbDoc = doc;
+    window._fbOnSnapshot = onSnapshot;
+    window._fbCollection = collection;
+
+    // Auto-load data from Firebase on startup
+    window._fbReady = true;
+    window.dispatchEvent(new Event("fb-ready"));
+  </script>
 </head>
 <body>
 
@@ -221,6 +251,18 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 <div class="app-header" id="app-header">
   <img id="header-logo" class="header-logo" alt="BaDa Readers" />
   <div class="header-meta" id="header-meta">선생님 전용 리포트 시스템 · 2026년 3월</div>
+  <div id="header-data-btns" style="display:none;display:flex;gap:8px;align-items:center;">
+    <span id="fb-save-indicator" style="display:none;font-size:11px;color:#fff;opacity:.8;"></span>
+    <button onclick="saveDataJSON()" title="데이터 저장"
+      style="font-size:11px;padding:5px 12px;border:1px solid rgba(255,255,255,.35);border-radius:20px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;font-weight:600;white-space:nowrap;">
+      💾 데이터 저장
+    </button>
+    <button onclick="document.getElementById('load-json-input').click()" title="데이터 불러오기"
+      style="font-size:11px;padding:5px 12px;border:1px solid rgba(255,255,255,.35);border-radius:20px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;font-weight:600;white-space:nowrap;">
+      📂 데이터 불러오기
+    </button>
+    <input type="file" id="load-json-input" accept=".json" style="display:none;" onchange="loadDataJSON(this)" />
+  </div>
 </div>
 
 <div class="app-body">
@@ -1926,7 +1968,6 @@ function collect(){
 
 function saveData(){
   if(selStu?.cls2 && activeCls===2){
-    // Save secondary class tab
     saveCurrentTabData();
     renderStudents();
     renderMonthTabs();
@@ -1935,7 +1976,6 @@ function saveData(){
     const d=collect();
     if(selStu){
       if(!allData[selStu.id]) allData[selStu.id]={};
-      // Preserve cls2Data if it exists
       if(allData[selStu.id][curMonth]?.cls2Data)
         d.cls2Data=allData[selStu.id][curMonth].cls2Data;
       allData[selStu.id][curMonth]=d;
@@ -1944,6 +1984,7 @@ function saveData(){
     }
     toast("저장 완료 ✅ ("+curMonth+")");
   }
+  scheduleFirebaseSave();
 }
 
 // ── Chart ──
@@ -3880,6 +3921,13 @@ function doLogin(){
   const meta = document.getElementById("header-meta");
   if(meta) meta.innerHTML = `선생님 전용 리포트 시스템 &nbsp;|&nbsp; <strong>${account.name}</strong> 님 환영해요! <button onclick="doLogout()" style="margin-left:8px;font-size:11px;padding:2px 10px;border:1px solid rgba(255,255,255,.4);border-radius:20px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;">로그아웃</button>`;
 
+  // Load Firebase data
+  fbInitAfterLogin();
+
+  // Show data save/load buttons
+  const dataBtns = document.getElementById("header-data-btns");
+  if(dataBtns) dataBtns.style.display="flex";
+
   // Show/hide admin section in sidebar
   const adminSec = document.getElementById("admin-sidebar-section");
   if(adminSec) adminSec.style.display = account.role==="admin" ? "block" : "none";
@@ -3912,6 +3960,8 @@ function doLogout(){
   document.getElementById("login-screen").style.display="flex";
   const adminSec = document.getElementById("admin-sidebar-section");
   if(adminSec) adminSec.style.display="none";
+  const dataBtnsL = document.getElementById("header-data-btns");
+  if(dataBtnsL) dataBtnsL.style.display="none";
 }
 
 
@@ -4028,6 +4078,149 @@ function changeMyPassword(){
   document.getElementById("pw-new").value="";
   document.getElementById("pw-confirm").value="";
   toast("비밀번호가 변경됐어요 ✅");
+}
+
+
+// ══════════════════════════════════
+// ── Data Save / Load (JSON) ──
+// ══════════════════════════════════
+
+function saveDataJSON(){
+  const snapshot = {
+    version: 1,
+    savedAt: new Date().toISOString(),
+    savedBy: currentUser?.name||"unknown",
+    students,
+    teachers,
+    allData,
+    templates: Object.fromEntries(
+      Object.entries(window._templates||{})
+    ),
+    loginAccounts: LOGIN_ACCOUNTS,
+  };
+
+  const json = JSON.stringify(snapshot, null, 2);
+  const blob = new Blob([json], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const date = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `bada-report-data-${date}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast("💾 데이터 저장 완료! 파일을 안전한 곳에 보관하세요.");
+}
+
+function loadDataJSON(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if(!data.version || !data.students){
+        toast("⚠️ 올바른 데이터 파일이 아니에요"); return;
+      }
+      if(!confirm(`"${data.savedBy}"님이 ${data.savedAt?.slice(0,10)||"?"} 저장한 데이터를 불러올까요?\n\n⚠️ 현재 데이터가 덮어씌워져요.`)) return;
+
+      // Restore all data
+      students.splice(0, students.length, ...(data.students||[]));
+      teachers.splice(0, teachers.length, ...(data.teachers||[]));
+      Object.keys(allData).forEach(k=>delete allData[k]);
+      Object.assign(allData, data.allData||{});
+      if(data.loginAccounts?.length){
+        LOGIN_ACCOUNTS.splice(0, LOGIN_ACCOUNTS.length, ...(data.loginAccounts));
+      }
+
+      // Refresh UI
+      renderStudents();
+      renderTeacherList();
+      renderTeacherSelects();
+      initQStudentSelect();
+      toast(`✅ 데이터 불러오기 완료! 학생 ${students.length}명 복원됨`);
+    } catch(err){
+      toast("⚠️ 파일을 읽는 중 오류가 발생했어요: " + err.message);
+    }
+    input.value=""; // reset input
+  };
+  reader.readAsText(file);
+}
+
+
+// ══════════════════════════════════
+// ── Firebase Sync ──
+// ══════════════════════════════════
+
+const FB_DOC_ID = "main"; // single shared document
+
+async function fbSaveAll(){
+  if(!window._fbReady || !window._db) return;
+  try {
+    const db = window._db;
+    const snapshot = {
+      students: JSON.parse(JSON.stringify(students)),
+      teachers: JSON.parse(JSON.stringify(teachers)),
+      allData: JSON.parse(JSON.stringify(allData)),
+      loginAccounts: JSON.parse(JSON.stringify(LOGIN_ACCOUNTS)),
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser?.name||"unknown"
+    };
+    await window._fbSetDoc(window._fbDoc(db, "bada-data", FB_DOC_ID), snapshot);
+    // Update save indicator
+    const ind = document.getElementById("fb-save-indicator");
+    if(ind){ ind.textContent="✅ 저장됨 " + new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"}); ind.style.color="#1D9E75"; }
+  } catch(e){
+    console.error("Firebase save error:", e);
+    const ind = document.getElementById("fb-save-indicator");
+    if(ind){ ind.textContent="⚠️ 저장 실패"; ind.style.color="#D4537E"; }
+  }
+}
+
+async function fbLoadAll(){
+  if(!window._fbReady || !window._db) return false;
+  try {
+    const db = window._db;
+    const snap = await window._fbGetDoc(window._fbDoc(db, "bada-data", FB_DOC_ID));
+    if(!snap.exists()) return false;
+    const data = snap.data();
+    if(data.students) students.splice(0,students.length,...data.students);
+    if(data.teachers) teachers.splice(0,teachers.length,...data.teachers);
+    if(data.allData){ Object.keys(allData).forEach(k=>delete allData[k]); Object.assign(allData,data.allData); }
+    if(data.loginAccounts?.length) LOGIN_ACCOUNTS.splice(0,LOGIN_ACCOUNTS.length,...data.loginAccounts);
+    return true;
+  } catch(e){
+    console.error("Firebase load error:", e);
+    return false;
+  }
+}
+
+// Auto-save after every saveData() call
+const _origSaveData = window.saveData;
+
+// Debounced auto-save
+let _fbSaveTimer = null;
+function scheduleFirebaseSave(){
+  if(_fbSaveTimer) clearTimeout(_fbSaveTimer);
+  _fbSaveTimer = setTimeout(()=>{ fbSaveAll(); }, 1500);
+  const ind = document.getElementById("fb-save-indicator");
+  if(ind){ ind.textContent="⏳ 저장 중..."; ind.style.color="#8A9BB0"; }
+}
+
+// Load data from Firebase after login
+async function fbInitAfterLogin(){
+  const ind = document.getElementById("fb-save-indicator");
+  if(ind){ ind.style.display="flex"; ind.textContent="🔄 데이터 불러오는 중..."; ind.style.color="#8A9BB0"; }
+  const loaded = await fbLoadAll();
+  if(loaded){
+    renderStudents();
+    renderTeacherList();
+    renderTeacherSelects();
+    if(ind){ ind.textContent="✅ 데이터 로드됨"; ind.style.color="#1D9E75"; }
+  } else {
+    if(ind){ ind.textContent="🆕 새 데이터"; ind.style.color="#8A9BB0"; }
+  }
 }
 
 // ── Init ──
