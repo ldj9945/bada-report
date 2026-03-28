@@ -251,17 +251,8 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 <div class="app-header" id="app-header">
   <img id="header-logo" class="header-logo" alt="BaDa Readers" />
   <div class="header-meta" id="header-meta">선생님 전용 리포트 시스템 · 2026년 3월</div>
-  <div id="header-data-btns" style="display:none;display:flex;gap:8px;align-items:center;">
-    <span id="fb-save-indicator" style="display:none;font-size:11px;color:#fff;opacity:.8;"></span>
-    <button onclick="saveDataJSON()" title="데이터 저장"
-      style="font-size:11px;padding:5px 12px;border:1px solid rgba(255,255,255,.35);border-radius:20px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;font-weight:600;white-space:nowrap;">
-      💾 데이터 저장
-    </button>
-    <button onclick="document.getElementById('load-json-input').click()" title="데이터 불러오기"
-      style="font-size:11px;padding:5px 12px;border:1px solid rgba(255,255,255,.35);border-radius:20px;background:rgba(255,255,255,.12);color:#fff;cursor:pointer;font-weight:600;white-space:nowrap;">
-      📂 데이터 불러오기
-    </button>
-    <input type="file" id="load-json-input" accept=".json" style="display:none;" onchange="loadDataJSON(this)" />
+  <div id="header-data-btns" style="display:none;align-items:center;">
+    <span id="fb-save-indicator" style="display:none;font-size:11px;color:#fff;opacity:.85;"></span>
   </div>
 </div>
 
