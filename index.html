@@ -1475,6 +1475,7 @@ function addStudent(){
   onNewClsChange();
   document.getElementById("new-name").value="";
   renderStudents(); toast(n+" 추가됨");
+  scheduleFirebaseSave();
 }
 
 function selStudent(id){
@@ -2619,6 +2620,7 @@ function addTeacher(){
   renderTeacherSelects();
   renderTeacherLevelCheckboxes(); // reset checkboxes
   toast(name+" 선생님 추가됨 ✅");
+  scheduleFirebaseSave();
 }
 
 function removeTeacher(id){
@@ -2627,6 +2629,7 @@ function removeTeacher(id){
   students.forEach(s=>{ if(s.teacherId===id) delete s.teacherId; });
   if(activeTeacherId===id){ activeTeacherId=""; syncSidebarTeacher(); }
   renderTeacherList(); renderTeacherSelects(); renderStudents();
+  scheduleFirebaseSave();
 }
 
 function renderTeacherLevelCheckboxes(){
@@ -2852,6 +2855,7 @@ function setStudentStatus(id, status){
   renderStudents();
   renderTeacherList();
   toast(`${s.name} → ${labels[status]} 처리됨`);
+  scheduleFirebaseSave();
 }
 
 function editStudent(id){
@@ -2916,6 +2920,7 @@ function saveEditStudent(){
   renderStudents();
   renderTeacherList();
   toast(`${s.name} 정보 저장됨 ✅`);
+  scheduleFirebaseSave();
 }
 
 
@@ -3503,6 +3508,7 @@ function saveCurrentTabData(){
   allData[selStu.id][curMonth].cls2Data={
     books:d.books, clss:d.clss, beh:d.beh, rubric:d.rubric
   };
+  scheduleFirebaseSave();
 }
 
 function loadTabData(){
@@ -3705,6 +3711,7 @@ function deleteStudent(id){
   renderStudents();
   renderTeacherList();
   toast(`${s.name} 삭제됨`);
+  scheduleFirebaseSave();
 }
 
 
@@ -4042,6 +4049,7 @@ function addAccount(){
   renderAccountTable();
   renderTeacherSelects();
   toast(`${name} 계정 추가됨 ✅`);
+  scheduleFirebaseSave();
 }
 
 function deleteAccount(id){
@@ -4052,6 +4060,7 @@ function deleteAccount(id){
   LOGIN_ACCOUNTS.splice(LOGIN_ACCOUNTS.indexOf(acc),1);
   renderAccountTable();
   toast(`${acc.name} 계정 삭제됨`);
+  scheduleFirebaseSave();
 }
 
 function changeMyPassword(){
