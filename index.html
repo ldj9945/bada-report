@@ -1233,6 +1233,15 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
       </div>
     </div>
 
+    <div class="fg" style="margin-bottom:14px;">
+      <label>📚 월간 목표 권수 Monthly Target Books <span style="font-size:10px;color:var(--muted);font-weight:400;">(비워두면 레벨 기본값 사용)</span></label>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input id="edit-target-books" type="number" placeholder="레벨 기본값" min="1" max="100"
+          style="width:120px;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:14px;" />
+        <span id="edit-target-books-hint" style="font-size:11px;color:var(--muted);"></span>
+      </div>
+    </div>
+
     <div style="display:flex;gap:10px;justify-content:flex-end;">
       <button class="btn btn-sec" onclick="closeEditModal()">취소</button>
       <button class="btn btn-primary" onclick="saveEditStudent()">💾 저장</button>
@@ -2454,9 +2463,25 @@ function buildPreview(d, stuCls){
                 <div style="flex:1;text-align:center;"><div style="font-size:8px;color:#aaa;">4월</div><div style="font-size:14px;font-weight:700;color:#ccc;">—</div></div>
               </div>
             </div>
-            <div style="border:1px solid ${cfg.border};border-radius:6px;padding:8px 12px;">
-              <div style="font-size:9px;color:#8A9BB0;">이번달 읽은 권수</div>
-              <div style="font-size:18px;font-weight:700;color:${cfg.primary};">${d.booksCurr||"—"}</div>
+            <div style="border:1px solid ${cfg.border};border-radius:6px;padding:8px 12px;min-width:120px;">
+              <div style="font-size:9px;color:#8A9BB0;margin-bottom:4px;">이번달 읽은 권수 Books Read</div>
+              ${(()=>{
+                const curr = parseFloat(d.booksCurr)||0;
+                const stu = students.find(x=>x.id===d.stuId);
+                const target = stu ? getTargetBooks(stu) : null;
+                if(!target) return `<div style="font-size:18px;font-weight:700;color:${cfg.primary};">${d.booksCurr||"—"}</div>`;
+                const pct = Math.min(100, Math.round((curr/target)*100));
+                const barColor = pct>=100?"#1D9E75":pct>=70?cfg.primary:pct>=40?"#BA7517":"#D4537E";
+                return `
+                  <div style="display:flex;align-items:baseline;gap:4px;margin-bottom:4px;">
+                    <span style="font-size:20px;font-weight:800;color:${barColor};">${curr}</span>
+                    <span style="font-size:11px;color:#8A9BB0;">/ ${target}권 목표</span>
+                    <span style="font-size:11px;font-weight:700;color:${barColor};">${pct}%</span>
+                  </div>
+                  <div style="height:6px;background:#F0F4F8;border-radius:4px;overflow:hidden;">
+                    <div style="height:100%;width:${pct}%;background:${barColor};border-radius:4px;"></div>
+                  </div>`;
+              })()}
             </div>
             <div style="border:1px solid ${cfg.border};border-radius:6px;padding:8px 12px;">
               <div style="font-size:9px;color:#8A9BB0;">읽은 단어수 WC</div>
@@ -3121,6 +3146,14 @@ function editStudent(id){
   const statusVal = s.status||"active";
   const statusRadio = document.querySelector(`input[name='edit-status'][value='${statusVal}']`);
   if(statusRadio) statusRadio.checked = true;
+  // Target books
+  const tbInput = document.getElementById("edit-target-books");
+  const tbHint = document.getElementById("edit-target-books-hint");
+  if(tbInput){
+    tbInput.value = s.targetBooks||"";
+    const def = LEVEL_TARGET_BOOKS[s.cls];
+    if(tbHint) tbHint.textContent = def ? `레벨 기본값: ${def}권` : "";
+  }
   modal.style.display = "flex";
 }
 
@@ -3144,6 +3177,10 @@ function saveEditStudent(){
   if(t2) s.teacherId2=t2; else delete s.teacherId2;
   const statusRadio = document.querySelector("input[name='edit-status']:checked");
   if(statusRadio) s.status = statusRadio.value;
+  // Target books
+  const tbVal = document.getElementById("edit-target-books")?.value;
+  if(tbVal && +tbVal > 0) s.targetBooks = +tbVal;
+  else delete s.targetBooks;
   closeEditModal();
   renderStudents();
   renderTeacherList();
@@ -3518,6 +3555,24 @@ function buildQPreview(stu, qdata){
       <div>
         <div style="font-family:Nunito,sans-serif;font-size:11px;font-weight:800;text-align:center;padding:5px;background:${cfg.primary};color:#fff;border-radius:5px;margin-bottom:8px;">Books Read per Month</div>
         ${barChart(bookCounts,mLabels,cfg.primary,cfg.primaryLight)}
+        ${(()=>{
+          const target = getTargetBooks(stu);
+          if(!target) return "";
+          const totalRead = bookCounts.reduce((a,b)=>a+b,0);
+          const totalTarget = target * months.length;
+          const pct = Math.min(100,Math.round((totalRead/totalTarget)*100));
+          const color = pct>=100?"#1D9E75":pct>=70?cfg.primary:pct>=40?"#BA7517":"#D4537E";
+          return `<div style="margin-top:8px;padding:8px 10px;background:${cfg.primaryLight};border-radius:8px;border:1px solid ${cfg.border};">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+              <span style="font-size:10px;font-weight:700;color:${cfg.primaryDark};">📚 목표 달성률 Goal Achievement</span>
+              <span style="font-size:11px;font-weight:800;color:${color};">${totalRead} / ${totalTarget}권 (${pct}%)</span>
+            </div>
+            <div style="height:8px;background:#fff;border-radius:4px;overflow:hidden;border:1px solid ${cfg.border};">
+              <div style="height:100%;width:${pct}%;background:${color};border-radius:4px;"></div>
+            </div>
+            <div style="font-size:9px;color:#8A9BB0;margin-top:3px;">월 목표 ${target}권 × ${months.length}개월 = 총 목표 ${totalTarget}권</div>
+          </div>`;
+        })()}
       </div>
       <div>
         <div style="font-family:Nunito,sans-serif;font-size:11px;font-weight:800;text-align:center;padding:5px;background:${cfg.primary};color:#fff;border-radius:5px;margin-bottom:8px;">Words Read per Month (WC)</div>
@@ -4930,6 +4985,36 @@ function applyScoreToGrade(input){
   });
 }
 
+
+
+// ── 레벨별 월간 목표 권수 (기본값) ──
+const LEVEL_TARGET_BOOKS = {
+  // 바다리더스: 평일 3권 × 약 20일 = 월 50권 목표
+  "Picture Book B - Nursery Picture Book": 50,
+  "Picture Book A1": 50,
+  "Picture Book A2": 50,
+  "Early Chapter Book": 50,
+  "Chapter Book 1": 50,
+  "Chapter Book 2": 50,
+  "Novel 1": 50,
+  "Novel 2": 50,
+  // 바다코어
+  "Junior Starter 1": 50,
+  "Junior Starter 2": 50,
+  "Junior Mover 1": 50,
+  "Junior Mover 2": 50,
+  "Junior Flyer": 50,
+  "Core Starter 1": 50,
+  "Core Starter 2": 50,
+  "Core Mover 1": 50,
+  "Core Mover 2": 50,
+};
+
+function getTargetBooks(stu){
+  // Student-specific override takes priority
+  if(stu.targetBooks) return stu.targetBooks;
+  return LEVEL_TARGET_BOOKS[stu.cls] || null;
+}
 
 // ── Init ──
 // Init is now triggered by doLogin() — only show login screen first
