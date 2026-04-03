@@ -277,6 +277,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
   <div class="sidebar-item" onclick="setType('monthly');showPage('input')"><span>🗓️</span><div><div>월간 리포트</div><div style="font-size:10px;opacity:.7;">Monthly Report</div></div></div>
   <div class="sidebar-item" onclick="showPage('quarterly')"><span>📊</span><div><div>3개월 리포트</div><div style="font-size:10px;opacity:.7;">Quarterly Report</div></div></div>
   <div class="sidebar-item" onclick="setType('final');showPage('input')"><span>🏆</span><div><div>파이널 리포트</div><div style="font-size:10px;opacity:.7;">Final Report</div></div></div>
+  <div class="sidebar-item" onclick="showPage('quickentry')"><span>⚡</span><div><div>반별 일괄 입력</div><div style="font-size:10px;opacity:.7;">Quick Entry</div></div></div>
   <!-- Admin only -->
   <div id="admin-sidebar-section" style="display:none;">
     <div style="height:1px;background:var(--border);margin:8px 14px;"></div>
@@ -290,7 +291,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 <!-- 선생님 목록 -->
 <div id="page-teachers" class="page">
   <div class="pg-title">선생님 목록 <span style="font-size:14px;font-weight:400;color:var(--muted);">Teachers</span></div>
-  <div class="pg-sub">선생님을 등록하고 담당 레벨을 지정하세요. 학생 추가 시 선생님을 선택할 수 있어요.</div>
+  <div class="pg-sub">Register teachers and assign their levels. · 선생님을 등록하고 담당 레벨을 지정하세요.</div>
 
   <!-- 등록된 선생님 목록 -->
   <div class="card">
@@ -326,9 +327,10 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 <div id="page-students" class="page active">
   <div class="pg-title">학생 목록 <span style="font-size:14px;font-weight:400;color:var(--muted);">Student List</span></div>
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
-    <div class="pg-sub" style="margin:0;">학생을 클릭해서 월별 리포트를 작성하세요 · Click a student to write monthly report</div>
+    <div class="pg-sub" style="margin:0;">Click a student to write a monthly report · 학생을 클릭해서 월별 리포트를 작성하세요</div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-sec" onclick="showBulkImport()" style="font-size:12px;padding:7px 14px;">📥 대량 등록 Bulk Import</button>
+      <button class="btn btn-sec" onclick="showBulkUpdate()" style="font-size:12px;padding:7px 14px;">✏️ 대량 수정 Bulk Update</button>
       <button class="btn btn-sec" onclick="exportExcel()" style="font-size:12px;padding:7px 14px;">📊 엑셀 다운로드 Export Excel</button>
     </div>
   </div>
@@ -514,7 +516,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 <!-- 반별 템플릿 -->
 <div id="page-template" class="page">
   <div class="pg-title">반별 템플릿 <span style="font-size:14px;font-weight:400;color:var(--muted);">Class Template</span></div>
-  <div class="pg-sub">반과 월을 선택하고 책/수업 목록을 미리 설정해두세요. 학생 리포트 작성 시 한 번에 불러올 수 있어요.</div>
+  <div class="pg-sub">Set up book and class lists per level. These will be auto-applied when creating student reports. · 반별 책/수업 목록을 미리 설정해두세요.</div>
 
   <div class="card">
     <div class="card-title">⚙️ 템플릿 설정 Template Setup</div>
@@ -906,7 +908,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 <!-- 3개월 리포트 -->
 <div id="page-quarterly" class="page">
   <div class="pg-title">3개월 리포트 <span style="font-size:14px;font-weight:400;color:var(--muted);">Quarterly Report</span></div>
-  <div class="pg-sub">3개월치 데이터를 집계해서 리포트를 생성해요 · Generate a 3-month progress report</div>
+  <div class="pg-sub">Generate a 3-month progress report · 3개월치 데이터를 집계해서 리포트를 생성해요</div>
 
   <!-- 학생 + 기간 선택 -->
   <div class="card">
@@ -983,7 +985,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
   <div class="pg-title">계정 관리 <span style="font-size:14px;font-weight:400;color:var(--muted);">Account Management</span>
     <span style="font-size:11px;font-weight:400;color:#D4537E;margin-left:8px;">🔑 Admin Only</span>
   </div>
-  <div class="pg-sub">선생님 계정을 추가하고 관리해요. 삭제된 계정은 즉시 로그인이 불가해요.</div>
+  <div class="pg-sub">Add and manage teacher accounts. Deleted accounts lose access immediately. · 선생님 계정을 추가하고 관리해요.</div>
 
   <!-- 등록된 계정 목록 -->
   <div class="card">
@@ -1049,6 +1051,75 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
       </div>
       <button class="btn btn-teal" onclick="changeMyPassword()" style="padding:8px 18px;align-self:flex-end;">변경</button>
     </div>
+  </div>
+</div>
+
+
+<!-- 반별 일괄 입력 -->
+<div id="page-quickentry" class="page">
+  <div class="pg-title">반별 일괄 입력 <span style="font-size:14px;font-weight:400;color:var(--muted);">Quick Entry</span></div>
+  <div class="pg-sub">Select a level and month to quickly enter SR, books, WC, and Behavior for all students. · 반과 월을 선택하면 학생들의 데이터를 한 화면에서 입력해요.</div>
+
+  <!-- 설정 -->
+  <div class="card">
+    <div class="card-title">⚙️ 설정</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+      <div class="fg" style="flex:1;min-width:160px;">
+        <label>레벨 선택 Level</label>
+        <select id="qe-cls" class="sel-input" style="font-size:13px;padding:8px 11px;" onchange="renderQuickEntry()">
+            <option value="">전체 All Levels</option>
+            <option value="__readers__">── 바다리더스 전체 All Readers</option>
+            <option value="__core__">── 바다코어 전체 All Core</option>
+          <optgroup label="바다리더스 Bada Readers">
+            <option value="Picture Book B - Nursery Picture Book">Picture Book B - Nursery Picture Book</option>
+            <option value="Picture Book A1">Picture Book A1</option>
+            <option value="Picture Book A2">Picture Book A2</option>
+            <option value="Early Chapter Book">Early Chapter Book</option>
+            <option value="Chapter Book 1">Chapter Book 1</option>
+            <option value="Chapter Book 2">Chapter Book 2</option>
+            <option value="Novel 1">Novel 1</option>
+            <option value="Novel 2">Novel 2</option>
+          </optgroup>
+          <optgroup label="바다코어 Bada Core">
+            <option value="Junior Starter 1">Junior Starter 1</option>
+            <option value="Junior Starter 2">Junior Starter 2</option>
+            <option value="Junior Mover 1">Junior Mover 1</option>
+            <option value="Junior Mover 2">Junior Mover 2</option>
+            <option value="Junior Flyer">Junior Flyer</option>
+            <option value="Core Starter 1">Core Starter 1</option>
+            <option value="Core Starter 2">Core Starter 2</option>
+            <option value="Core Mover 1">Core Mover 1</option>
+            <option value="Core Mover 2">Core Mover 2</option>
+            <option value="Core Flyer">Core Flyer</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="fg" style="flex:1;min-width:140px;">
+        <label>월 선택 Month</label>
+        <select id="qe-month" class="sel-input" style="font-size:13px;padding:8px 11px;" onchange="renderQuickEntry()">
+          <option value="2025/09">2025년 9월</option><option value="2025/10">2025년 10월</option>
+          <option value="2025/11">2025년 11월</option><option value="2025/12">2025년 12월</option>
+          <option value="2026/01">2026년 1월</option><option value="2026/02">2026년 2월</option>
+          <option value="2026/03" selected>2026년 3월</option><option value="2026/04">2026년 4월</option>
+          <option value="2026/05">2026년 5월</option><option value="2026/06">2026년 6월</option>
+          <option value="2026/07">2026년 7월</option><option value="2026/08">2026년 8월</option>
+        </select>
+      </div>
+      <div class="fg" style="flex:1;min-width:140px;">
+        <label>선생님 필터 Teacher Filter <span style="font-size:10px;font-weight:400;color:var(--muted);">(선택사항 Optional)</span></label>
+        <select id="qe-teacher" class="sel-input" style="font-size:13px;padding:8px 11px;" onchange="renderQuickEntry()">
+          <option value="">전체 선생님 All Teachers</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="saveAllQuickEntry()" style="padding:8px 18px;align-self:flex-end;">
+        💾 전체 저장
+      </button>
+    </div>
+  </div>
+
+  <!-- 입력 테이블 -->
+  <div class="card" style="overflow-x:auto;">
+    <div id="qe-table-wrap"></div>
   </div>
 </div>
 
@@ -1225,6 +1296,58 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
     </div>
   </div>
 </div>
+<!-- 대량 수정 모달 -->
+<div id="bulk-update-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;align-items:center;justify-content:center;">
+  <div style="background:var(--card);border-radius:var(--radius);padding:28px 32px;width:640px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.2);">
+    <div style="font-family:'Nunito',sans-serif;font-size:18px;font-weight:800;margin-bottom:6px;">✏️ 대량 학생 수정 Bulk Update</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
+      이름으로 학생을 찾아 반/선생님/상태를 한 번에 변경해요. 비워두면 해당 항목은 변경하지 않아요.
+    </div>
+
+    <!-- Column guide -->
+    <div style="background:var(--bg);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:11px;">
+      <div style="font-weight:700;color:var(--text);margin-bottom:8px;">📋 컬럼 순서 (탭으로 구분) — 변경 안할 항목은 비워두세요</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+        <span style="padding:3px 10px;background:var(--primary-dark);color:#fff;border-radius:6px;font-size:11px;font-weight:700;">1. 이름* (필수)</span>
+        <span style="color:var(--muted);">→</span>
+        <span style="padding:3px 10px;background:var(--primary-light);color:var(--primary-dark);border-radius:6px;font-size:11px;font-weight:700;">2. 새 메인반</span>
+        <span style="color:var(--muted);">→</span>
+        <span style="padding:3px 10px;background:var(--primary-light);color:var(--primary-dark);border-radius:6px;font-size:11px;font-weight:700;">3. 새 추가반</span>
+        <span style="color:var(--muted);">→</span>
+        <span style="padding:3px 10px;background:var(--primary-light);color:var(--primary-dark);border-radius:6px;font-size:11px;font-weight:700;">4. 새 선생님1</span>
+        <span style="color:var(--muted);">→</span>
+        <span style="padding:3px 10px;background:var(--primary-light);color:var(--primary-dark);border-radius:6px;font-size:11px;font-weight:700;">5. 새 선생님1b</span>
+        <span style="color:var(--muted);">→</span>
+        <span style="padding:3px 10px;background:var(--primary-light);color:var(--primary-dark);border-radius:6px;font-size:11px;font-weight:700;">6. 새 선생님2</span>
+        <span style="color:var(--muted);">→</span>
+        <span style="padding:3px 10px;background:var(--primary-light);color:var(--primary-dark);border-radius:6px;font-size:11px;font-weight:700;">7. 상태</span>
+      </div>
+      <div style="font-size:10px;color:var(--muted);">상태: 재원 / 휴원 / 퇴원 중 하나 입력</div>
+    </div>
+
+    <!-- Example -->
+    <div style="margin-bottom:6px;font-size:12px;font-weight:600;color:var(--muted);">예시:</div>
+    <div style="background:#F5F4FA;border-radius:6px;padding:8px 12px;font-family:monospace;font-size:11px;color:#555;margin-bottom:14px;line-height:2;">
+      김민준&nbsp;&nbsp;&nbsp;&nbsp;Chapter Book 2&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888;">(반만 변경)</span><br>
+      이서연&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Sarah&nbsp;&nbsp;&nbsp;&nbsp;김선생&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:#888;">(선생님만 변경)</span><br>
+      박지호&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;휴원&nbsp;&nbsp;&nbsp;<span style="color:#888;">(상태만 변경)</span>
+    </div>
+
+    <textarea id="bulk-update-text" rows="8"
+      style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:12px;font-family:monospace;outline:none;resize:vertical;"
+      placeholder="이름&#9;새메인반&#9;새추가반&#9;새선생님1&#9;새선생님1b&#9;새선생님2&#9;상태"></textarea>
+
+    <div id="bulk-update-preview" style="margin-top:12px;font-size:12px;"></div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+      <button class="btn btn-sec" onclick="document.getElementById('bulk-update-modal').style.display='none'">취소</button>
+      <button class="btn btn-primary" onclick="doBulkUpdate()">✏️ 수정 적용</button>
+    </div>
+  </div>
+</div>
+
+
+
 
 <div class="toast" id="toast"></div>
 
@@ -1263,8 +1386,48 @@ const READERS_DEFAULT_CLASSES = [
   {name:"Writing Workbook (라이팅 워크북)", hwFormat:"8/8"},
 ];
 
+const CORE_DEFAULT_CLASSES = {
+  "Junior Starter 1": [
+    {name:"The Best Reading HW", hwFormat:""},
+    {name:"Phonics HW", hwFormat:""},
+  ],
+  "Junior Starter 2": [
+    {name:"The Best Reading HW", hwFormat:""},
+    {name:"Phonics HW", hwFormat:""},
+  ],
+  "Junior Mover 1": [
+    {name:"The Best Reading HW", hwFormat:""},
+    {name:"Writing HW", hwFormat:""},
+  ],
+  "Junior Mover 2": [
+    {name:"The Best Reading HW", hwFormat:""},
+    {name:"Writing HW", hwFormat:""},
+  ],
+  "Junior Flyer": [
+    {name:"The Best Reading HW", hwFormat:""},
+    {name:"Writing HW", hwFormat:""},
+  ],
+  "Core Starter 1": [
+    {name:"Reading For Vocab HW", hwFormat:""},
+    {name:"Writing Framework HW", hwFormat:""},
+  ],
+  "Core Starter 2": [
+    {name:"Reading For Vocab HW", hwFormat:""},
+    {name:"Writing Framework HW", hwFormat:""},
+  ],
+  "Core Mover 1": [
+    {name:"Reading For Vocab HW", hwFormat:""},
+    {name:"Creative Writing HW", hwFormat:""},
+  ],
+  "Core Mover 2": [
+    {name:"Reading For Vocab HW", hwFormat:""},
+    {name:"Creative Writing HW", hwFormat:""},
+  ],
+};
+
 function getDefaultClasses(cls){
   if(getBranch(cls)==="readers") return READERS_DEFAULT_CLASSES;
+  if(getBranch(cls)==="core") return CORE_DEFAULT_CLASSES[cls]||[];
   return [];
 }
 
@@ -1332,7 +1495,7 @@ function showPage(p){
   document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
   document.querySelectorAll(".sidebar-item").forEach(x=>x.classList.remove("active"));
   document.getElementById("page-"+p).classList.add("active");
-  const m={students:0,teachers:1,template:2,input:3,quarterly:4,preview:5,accounts:6};
+  const m={students:0,teachers:1,template:2,input:3,quarterly:4,preview:5,accounts:6,quickentry:7};
   document.querySelectorAll(".sidebar-item")[m[p]]?.classList.add("active");
   if(p==="teachers"){
     renderTeacherList();
@@ -1340,6 +1503,7 @@ function showPage(p){
   }
   if(p==="quarterly") initQStudentSelect();
   if(p==="accounts") renderAccountTable();
+  if(p==="quickentry") renderQuickEntry();
   if(p==="preview"){
     const bothBtn=document.getElementById("dl-both-btn");
     if(bothBtn) bothBtn.style.display=(selStu?.cls2)?"inline-block":"none";
@@ -1360,7 +1524,66 @@ function stuDone(s){
   return Object.keys(sd).length > 0;
 }
 function stuCurMonthDone(s){
-  return !!(allData[s.id] && allData[s.id][curMonth]);
+  const d = allData[s.id]?.[curMonth];
+  if(!d) return false;
+
+  // 1. 책 목록 1권 이상
+  const hasBooks = (d.books||[]).filter(b=>b.name).length >= 1;
+  if(!hasBooks) return false;
+
+  // 2. Grade: Classes 1개 이상
+  const hasClasses = (d.clss||[]).filter(c=>c.name).length >= 1;
+  if(!hasClasses) return false;
+
+  // 3. Behavior 4항목 모두 입력
+  const beh = d.beh||{};
+  const hasBeh = beh.parti && beh.focus && beh.hw && beh.atti;
+  if(!hasBeh) return false;
+
+  // 4. Writing/Speaking Rubric (해당 레벨만)
+  if(hasWritingRubric(s.cls)){
+    const wTopics = d.rubric?.wTopics||[];
+    const sTopics = d.rubric?.sTopics||[];
+    const hasRubric = wTopics.some(t=>t.score) || sTopics.some(t=>t.score);
+    if(!hasRubric) return false;
+  }
+
+  // 2반 학생: 추가반도 체크
+  if(s.cls2 && d.cls2Data){
+    const d2 = d.cls2Data;
+    const hasBooks2 = (d2.books||[]).filter(b=>b.name).length >= 1;
+    const hasClasses2 = (d2.clss||[]).filter(c=>c.name).length >= 1;
+    const beh2 = d2.beh||{};
+    const hasBeh2 = beh2.parti && beh2.focus && beh2.hw && beh2.atti;
+    if(!hasBooks2 || !hasClasses2 || !hasBeh2) return false;
+    if(hasWritingRubric(s.cls2)){
+      const wT2 = d2.rubric?.wTopics||[];
+      const sT2 = d2.rubric?.sTopics||[];
+      if(!wT2.some(t=>t.score) && !sT2.some(t=>t.score)) return false;
+    }
+  }
+
+  return true;
+}
+
+// 완료 진행도 (몇 % 됐는지)
+function stuCompletionPct(s){
+  const d = allData[s.id]?.[curMonth];
+  if(!d) return 0;
+  let total=0, done=0;
+  // 책
+  total++; if((d.books||[]).filter(b=>b.name).length>=1) done++;
+  // 수업
+  total++; if((d.clss||[]).filter(c=>c.name).length>=1) done++;
+  // 행동
+  total++; const beh=d.beh||{}; if(beh.parti&&beh.focus&&beh.hw&&beh.atti) done++;
+  // 루브릭
+  if(hasWritingRubric(s.cls)){
+    total++;
+    const wT=d.rubric?.wTopics||[]; const sT=d.rubric?.sTopics||[];
+    if(wT.some(t=>t.score)||sT.some(t=>t.score)) done++;
+  }
+  return Math.round((done/total)*100);
 }
 
 function renderStudents(){
@@ -1417,7 +1640,12 @@ function renderStudents(){
           ${ts.map(t=>`👩‍🏫 ${t.name}`).join("<br>")||"—"}
         </td>
         <td onclick="selStudent(${s.id})" style="cursor:pointer;">
-          <span class="stu-badge ${done?"sb-done":"sb-pend"}">${done?"✅ 완료":"⏳ 미작성"}</span>
+          ${(()=>{
+            const pct=stuCompletionPct(s);
+            if(done) return '<span class="stu-badge sb-done">✅ 완료</span>';
+            if(pct===0) return '<span class="stu-badge sb-pend">⏳ 미작성</span>';
+            return `<span class="stu-badge" style="background:#FFF8E0;color:#BA7517;border:1px solid #E09A00;">📝 ${pct}%</span>`;
+          })()}
         </td>
         <td style="font-size:11px;font-weight:600;color:${st==="leave"?"#BA7517":st==="exit"?"#888":"var(--teal)"};">
           ${statusLabel[st]||""}
@@ -1829,7 +2057,7 @@ function addBook(d={}){
     <td><input type="text" placeholder="책 이름 Book name" value="${d.name||""}" /></td>
     <td><div class="grade-grp">${["A","B","C","D"].map(g=>`<button type="button" class="gbtn ${d.comp===g?"sel-"+g:""}" onclick="selG(this,'${g}')">${g}</button>`).join("")}</div></td>
     <td><div class="grade-grp">${["A","B","C","D"].map(g=>`<button type="button" class="gbtn ${d.voc===g?"sel-"+g:""}" onclick="selG(this,'${g}')">${g}</button>`).join("")}</div></td>
-    <td class="score-col" style="display:${isCore?"table-cell":"none"};"><input type="text" placeholder="10/10" value="${d.score||""}" style="width:60px;" /></td>
+    <td class="score-col" style="display:${isCore?"table-cell":"none"};"><input type="text" placeholder="10/10" value="${d.score||""}" style="width:60px;" oninput="applyScoreToGrade(this)" /></td>
     <td><button class="del-btn" onclick="this.closest('tr').remove()">×</button></td>`;
   document.getElementById("book-tbody").appendChild(tr);
 }
@@ -1838,7 +2066,7 @@ function addCls(d={}){
   const tr=document.createElement("tr");
   tr.innerHTML=`
     <td><input type="text" placeholder="Reading For Vocabulary" value="${d.name||""}" /></td>
-    <td><input type="text" placeholder="10/10" value="${d.score||""}" /></td>
+    <td><input type="text" placeholder="10/10" value="${d.score||""}" oninput="applyScoreToGrade(this)" /></td>
     <td><div class="grade-grp">${["A","B","C","D"].map(g=>`<button type="button" class="gbtn ${d.grade===g?"sel-"+g:""}" onclick="selG(this,'${g}')">${g}</button>`).join("")}</div></td>
     <td><button class="del-btn" onclick="this.closest('tr').remove()">×</button></td>`;
   document.getElementById("cls-tbody").appendChild(tr);
@@ -4222,6 +4450,486 @@ async function fbInitAfterLogin(){
     if(ind){ ind.textContent="🆕 새 데이터"; ind.style.color="#8A9BB0"; }
   }
 }
+
+
+// ── Bulk Update ──
+function showBulkUpdate(){
+  document.getElementById("bulk-update-modal").style.display="flex";
+  document.getElementById("bulk-update-text").value="";
+  document.getElementById("bulk-update-preview").innerHTML="";
+}
+
+function doBulkUpdate(){
+  const raw=document.getElementById("bulk-update-text").value.trim();
+  if(!raw){ toast("내용을 입력해주세요"); return; }
+  const lines=raw.split("\n").filter(l=>l.trim());
+  const updated=[]; const errors=[]; const skipped=[];
+
+  lines.forEach((line,i)=>{
+    const parts=line.split("\t").map(p=>p.trim());
+    const name=parts[0];
+    if(!name){ errors.push(`줄 ${i+1}: 이름이 없어요`); return; }
+
+    // Find student by name
+    const stu=students.find(s=>s.name===name);
+    if(!stu){ errors.push(`줄 ${i+1}: "${name}" 학생을 찾을 수 없어요`); return; }
+
+    const newCls    = parts[1]||"";
+    const newCls2   = parts[2]||"";
+    const newT1     = parts[3]||"";
+    const newT1b    = parts[4]||"";
+    const newT2     = parts[5]||"";
+    const newStatus = parts[6]||"";
+
+    const changes=[];
+
+    // 반/레벨 변경
+    if(newCls){
+      const matched=fuzzyMatchLevel(newCls);
+      if(!matched){ errors.push(`줄 ${i+1}: 레벨을 찾을 수 없어요 → "${newCls}"`); return; }
+      if(stu.cls!==matched){ stu.cls=matched; changes.push(`반→${matched}`); }
+    }
+
+    // 추가반 변경 (-로 입력하면 제거)
+    if(newCls2){
+      if(newCls2==="-"){ delete stu.cls2; changes.push("추가반 제거"); }
+      else {
+        const matched2=fuzzyMatchLevel(newCls2);
+        if(!matched2){ errors.push(`줄 ${i+1}: 추가반 레벨을 찾을 수 없어요 → "${newCls2}"`); return; }
+        if(stu.cls2!==matched2){ stu.cls2=matched2; changes.push(`추가반→${matched2}`); }
+      }
+    }
+
+    // 선생님 변경
+    if(newT1){
+      if(newT1==="-"){ delete stu.teacherId; changes.push("선생님1 제거"); }
+      else {
+        const t=fuzzyMatchTeacher(newT1);
+        if(!t){ errors.push(`줄 ${i+1}: 선생님을 찾을 수 없어요 → "${newT1}" (변경 건너뜀)`); }
+        else if(stu.teacherId!==t.id){ stu.teacherId=t.id; changes.push(`선생님1→${t.name}`); }
+      }
+    }
+    if(newT1b){
+      if(newT1b==="-"){ delete stu.teacherId1b; changes.push("선생님1b 제거"); }
+      else {
+        const t=fuzzyMatchTeacher(newT1b);
+        if(!t){ errors.push(`줄 ${i+1}: 선생님1b를 찾을 수 없어요 → "${newT1b}"`); }
+        else if(stu.teacherId1b!==t.id){ stu.teacherId1b=t.id; changes.push(`선생님1b→${t.name}`); }
+      }
+    }
+    if(newT2){
+      if(newT2==="-"){ delete stu.teacherId2; changes.push("선생님2 제거"); }
+      else {
+        const t=fuzzyMatchTeacher(newT2);
+        if(!t){ errors.push(`줄 ${i+1}: 선생님2를 찾을 수 없어요 → "${newT2}"`); }
+        else if(stu.teacherId2!==t.id){ stu.teacherId2=t.id; changes.push(`선생님2→${t.name}`); }
+      }
+    }
+
+    // 상태 변경
+    if(newStatus){
+      const statusMap={"재원":"active","휴원":"leave","퇴원":"exit","active":"active","leave":"leave","exit":"exit"};
+      const st=statusMap[newStatus];
+      if(!st){ errors.push(`줄 ${i+1}: 상태값이 올바르지 않아요 → "${newStatus}" (재원/휴원/퇴원)`); }
+      else if((stu.status||"active")!==st){ stu.status=st; changes.push(`상태→${newStatus}`); }
+    }
+
+    if(changes.length>0) updated.push(`${name}: ${changes.join(", ")}`);
+    else skipped.push(name);
+  });
+
+  const preview=document.getElementById("bulk-update-preview");
+  let msg="";
+  if(updated.length) msg+=`<div style="color:var(--teal);font-weight:600;margin-bottom:4px;">✅ ${updated.length}명 수정 완료</div><div style="font-size:11px;color:var(--text);">${updated.join("<br>")}</div>`;
+  if(skipped.length) msg+=`<div style="color:var(--muted);margin-top:6px;font-size:11px;">변경사항 없음: ${skipped.join(", ")}</div>`;
+  if(errors.length) msg+=`<div style="color:#D4537E;margin-top:8px;font-weight:600;">⚠️ ${errors.length}개 주의</div><div style="font-size:11px;color:#D4537E;">${errors.join("<br>")}</div>`;
+  preview.innerHTML=msg;
+
+  if(updated.length){
+    renderStudents();
+    renderTeacherList();
+    scheduleFirebaseSave();
+    toast(`${updated.length}명 수정 완료!`);
+    if(!errors.length) setTimeout(()=>document.getElementById("bulk-update-modal").style.display="none", 2000);
+  }
+}
+
+
+// ══════════════════════════════════
+// ── Quick Entry (반별 일괄 입력) ──
+// ══════════════════════════════════
+
+const BEH_GRADES = ["A","B","C","D"];
+const BEH_KEYS = ["parti","focus","hw","atti"];
+const BEH_SHORT = ["Parti","Focus","HW","Atti"];
+
+function renderQuickEntry(){
+  const cls = document.getElementById("qe-cls")?.value||"";
+  const month = document.getElementById("qe-month")?.value||curMonth;
+  const isCore = isCoreCls(cls);
+  const tmpl = templates[cls+"_"+month]||{};
+  const tmplBooks = tmpl.books||[];
+  // For readers: always include default classes (Pictionary, Weekly Reading, Writing Workbook)
+  const tmplClssBase = tmpl.clss||[];
+  const isReadersBranch = cls==="__readers__" || (cls && getBranch(cls)==="readers");
+  const isCoreBranch = cls==="__core__" || (cls && getBranch(cls)==="core");
+  // For branch-wide selections, use first level of that branch as default key
+  const mergeKey = isReadersBranch ? (cls==="__readers__"?"Picture Book A1":cls)
+                 : isCoreBranch    ? (cls==="__core__"?null:cls)
+                 : cls;
+  const tmplClss = (isReadersBranch || (isCoreBranch && mergeKey))
+    ? mergeWithDefaults(tmplClssBase, mergeKey||cls)
+    : tmplClssBase;
+
+  // Populate teacher select
+  const qeTeacherSel = document.getElementById("qe-teacher");
+  if(qeTeacherSel){
+    const curTeacher = qeTeacherSel.value;
+    const clsBranch = cls==="__readers__" ? "readers" : cls==="__core__" ? "core" : (cls ? getBranch(cls) : "");
+  const relevantTeachers = clsBranch
+    ? teachers.filter(t=>t.branch===clsBranch||t.branch==="all")
+    : teachers;
+    qeTeacherSel.innerHTML = `<option value="">전체 선생님 All Teachers</option>`
+      + relevantTeachers.map(t=>`<option value="${t.id}">${t.name}</option>`).join("");
+    if(curTeacher) qeTeacherSel.value = curTeacher;
+  }
+  const selectedTeacherId = document.getElementById("qe-teacher")?.value||"";
+
+  const list = students.filter(s=>{
+    // Level filter
+    if(cls==="__readers__"){
+      if(getBranch(s.cls)!=="readers" && getBranch(s.cls2||"")!=="readers") return false;
+    } else if(cls==="__core__"){
+      if(getBranch(s.cls)!=="core" && getBranch(s.cls2||"")!=="core") return false;
+    } else if(cls){
+      if(s.cls!==cls && s.cls2!==cls) return false;
+    }
+    if(s.status && s.status!=="active") return false;
+    if(selectedTeacherId){
+      const ts = getStudentTeachers(s);
+      if(!ts.find(t=>t.id===selectedTeacherId)) return false;
+    }
+    return true;
+  });
+  const wrap = document.getElementById("qe-table-wrap");
+  if(!wrap) return;
+
+  if(!list.length){
+    wrap.innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px;">이 레벨에 해당하는 학생이 없어요</div>';
+    return;
+  }
+
+  const noTmpl = !tmplBooks.length && !tmplClss.length;
+  const tmplWarning = noTmpl
+    ? `<div style="background:var(--amber-light);border:1px solid var(--border);border-radius:8px;padding:9px 14px;font-size:12px;color:var(--amber);font-weight:600;margin-bottom:10px;">
+        ⚠️ 이 레벨/월에 설정된 템플릿이 없어요. <button onclick="showPage('template')" style="margin-left:6px;font-size:11px;padding:2px 8px;border:1px solid var(--amber);border-radius:5px;background:none;color:var(--amber);cursor:pointer;">템플릿 설정하기 →</button>
+       </div>` : "";
+
+  const behCols = BEH_SHORT.map(s=>`<th style="background:var(--primary-light);padding:6px 6px;font-size:10px;color:var(--primary-dark);border:1px solid var(--border);text-align:center;min-width:48px;">${s}</th>`).join("");
+  const bookCols = tmplBooks.map((b,i)=>`
+    <th colspan="${isCore?2:1}" style="background:var(--primary-light);padding:5px 6px;font-size:9px;color:var(--primary-dark);border:1px solid var(--border);text-align:center;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${b.name}">
+      📖 ${b.name.length>20?b.name.slice(0,20)+"…":b.name}
+    </th>`).join("");
+  const bookSubCols = tmplBooks.map(()=>`
+    <th style="background:var(--primary-light);padding:5px 4px;font-size:9px;color:var(--primary-dark);border:1px solid var(--border);text-align:center;">Comp</th>
+    ${isCore?`<th style="background:var(--primary-light);padding:5px 4px;font-size:9px;color:var(--primary-dark);border:1px solid var(--border);text-align:center;">Score</th>`:""}`).join("");
+  const clsCols = tmplClss.map((c,i)=>`
+    <th style="background:var(--primary-light);padding:5px 4px;font-size:9px;color:var(--primary-dark);border:1px solid var(--border);text-align:center;min-width:52px;" title="${c.name}">
+      ${c.name.length>10?c.name.slice(0,10)+"…":c.name}
+    </th>`).join("");
+
+  wrap.innerHTML = `
+    ${tmplWarning}
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+      <strong style="color:var(--primary-dark);">${cls||cls==="__readers__"?"바다리더스 전체":cls==="__core__"?"바다코어 전체":"전체 All Levels"}</strong> · ${month.replace("/"," / ")} · ${list.length}명
+      &nbsp;|&nbsp; 📚 책 ${tmplBooks.length}권 &nbsp;|&nbsp; 📝 수업 ${tmplClss.length}개
+    </div>
+    <div style="overflow-x:auto;">
+    <table style="width:max-content;min-width:100%;border-collapse:collapse;font-size:12px;">
+      <thead>
+        <tr>
+          <th rowspan="2" style="background:var(--primary-light);padding:6px 10px;font-size:11px;color:var(--primary-dark);border:1px solid var(--border);text-align:left;min-width:90px;">이름</th>
+          <th rowspan="2" style="background:var(--primary-light);padding:6px 6px;font-size:10px;color:var(--primary-dark);border:1px solid var(--border);text-align:center;min-width:52px;">SR</th>
+          <th rowspan="2" style="background:var(--primary-light);padding:6px 6px;font-size:10px;color:var(--primary-dark);border:1px solid var(--border);text-align:center;min-width:52px;">권수</th>
+          <th rowspan="2" style="background:var(--primary-light);padding:6px 6px;font-size:10px;color:var(--primary-dark);border:1px solid var(--border);text-align:center;min-width:64px;">WC</th>
+          ${bookCols}
+          ${tmplClss.length?`<th colspan="${tmplClss.length}" style="background:var(--primary-light);padding:5px 6px;font-size:9px;color:var(--primary-dark);border:1px solid var(--border);text-align:center;">📝 Grade: Classes</th>`:""}
+          ${behCols.replace(/rowspan="2"/g,'')}
+          <th rowspan="2" style="background:var(--primary-light);padding:6px 6px;border:1px solid var(--border);min-width:36px;"></th>
+        </tr>
+        <tr>
+          ${bookSubCols}
+          ${clsCols}
+        </tr>
+      </thead>
+      <tbody>
+        ${list.map(s=>renderQERow(s, cls, month, isCore, tmplBooks, tmplClss)).join("")}
+      </tbody>
+    </table>
+    </div>`;
+}
+
+function renderQERow(s, cls, month, isCore, tmplBooks, tmplClss){
+  const d = (allData[s.id]||{})[month]||{};
+  const isCls2Tab = s.cls2===cls && s.cls!==cls;
+  const rd = isCls2Tab ? (d.cls2Data||{}) : d;
+
+  const sr = d.sr||"";
+  const booksCurr = d.booksCurr||"";
+  const wc = d.wc||"";
+  const beh = rd.beh||{};
+  const savedBooks = rd.books||[];
+  const savedClss = rd.clss||[];
+
+  // Grade helper
+  const GRADES = ["A","B","C","D"];
+  function gradeCell(val, cls2, bookIdx, type){
+    return `<td style="border:1px solid var(--border);padding:3px 2px;text-align:center;">
+      <select class="qe-grade" data-stuid="${s.id}" data-cls2="${isCls2Tab?1:0}" data-bidx="${bookIdx}" data-type="${type}"
+        style="font-size:11px;padding:1px 2px;border:1px solid var(--border);border-radius:4px;width:42px;cursor:pointer;background:${val?'var(--primary-light)':'#fff'};"
+        onchange="onQEBehChange(this)">
+        <option value="">—</option>
+        ${GRADES.map(g=>`<option value="${g}" ${val===g?'selected':''}>${g}</option>`).join("")}
+      </select>
+    </td>`;
+  }
+  function scoreCell(val, cls2, bookIdx){
+    return `<td style="border:1px solid var(--border);padding:3px 2px;text-align:center;">
+      <input type="text" class="qe-score" data-stuid="${s.id}" data-cls2="${isCls2Tab?1:0}" data-bidx="${bookIdx}"
+        value="${val}" placeholder="8/10"
+        style="width:46px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:3px 3px;font-size:11px;"
+        oninput="markQEDirty(${s.id})" />
+    </td>`;
+  }
+  function clsGradeCell(val, cidx){
+    return `<td style="border:1px solid var(--border);padding:3px 2px;text-align:center;">
+      <select class="qe-cls-grade" data-stuid="${s.id}" data-cls2="${isCls2Tab?1:0}" data-cidx="${cidx}"
+        style="font-size:11px;padding:1px 2px;border:1px solid var(--border);border-radius:4px;width:42px;cursor:pointer;background:${val?'var(--primary-light)':'#fff'};"
+        onchange="onQEBehChange(this)">
+        <option value="">—</option>
+        ${GRADES.map(g=>`<option value="${g}" ${val===g?'selected':''}>${g}</option>`).join("")}
+      </select>
+    </td>`;
+  }
+
+  // Book cells
+  const bookCells = tmplBooks.map((tb,bi)=>{
+    const sb = savedBooks.find(b=>b.name===tb.name)||{};
+    return gradeCell(sb.comp||"", isCls2Tab, bi, "comp")
+      + (isCore ? scoreCell(sb.score||"", isCls2Tab, bi) : "");
+  }).join("");
+
+  // Class cells
+  const clsCells = tmplClss.map((tc,ci)=>{
+    const sc = savedClss.find(c=>c.name===tc.name)||{};
+    // Score input only — grade auto-calculated on save
+    return `<td style="border:1px solid var(--border);padding:3px 2px;text-align:center;">
+      <input type="text" class="qe-cls-score" data-stuid="${s.id}" data-cls2="${isCls2Tab?1:0}" data-cidx="${ci}"
+        value="${sc.score||""}" placeholder="10/10"
+        style="width:52px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:3px;font-size:11px;"
+        oninput="markQEDirty(${s.id})" />
+    </td>`;
+  }).join("");
+
+  // Behavior cells
+  const behCells = BEH_KEYS.map((k)=>`
+    <td style="border:1px solid var(--border);padding:3px 2px;text-align:center;">
+      <select class="qe-beh" data-stuid="${s.id}" data-key="${k}" data-cls2="${isCls2Tab?1:0}"
+        style="font-size:11px;padding:1px 2px;border:1px solid var(--border);border-radius:4px;width:42px;cursor:pointer;background:${beh[k]?'var(--primary-light)':'#fff'};"
+        onchange="onQEBehChange(this)">
+        <option value="">—</option>
+        ${BEH_GRADES.map(g=>`<option value="${g}" ${beh[k]===g?'selected':''}>${g}</option>`).join("")}
+      </select>
+    </td>`).join("");
+
+  const isDone = stuCurMonthDone(s);
+  return `<tr id="qe-row-${s.id}" style="${isDone?'background:var(--teal-light);':''}">
+    <td style="border:1px solid var(--border);padding:6px 8px;font-weight:600;white-space:nowrap;">
+      ${s.name}${isCls2Tab?'<span style="font-size:9px;background:#EEE8FF;color:#4A3FBF;padding:1px 4px;border-radius:10px;margin-left:3px;">2반</span>':""}
+      ${isDone?'<span style="font-size:10px;color:var(--teal);margin-left:3px;">✅</span>':""}
+    </td>
+    <td style="border:1px solid var(--border);padding:3px 2px;text-align:center;">
+      <input type="number" step="0.1" class="qe-sr" data-stuid="${s.id}" value="${sr}" placeholder="2.3"
+        style="width:50px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:3px;font-size:12px;"
+        oninput="markQEDirty(${s.id})" />
+    </td>
+    <td style="border:1px solid var(--border);padding:3px 2px;text-align:center;">
+      <input type="number" class="qe-books" data-stuid="${s.id}" value="${booksCurr}" placeholder="12"
+        style="width:50px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:3px;font-size:12px;"
+        oninput="markQEDirty(${s.id})" />
+    </td>
+    <td style="border:1px solid var(--border);padding:3px 2px;text-align:center;">
+      <input type="number" class="qe-wc" data-stuid="${s.id}" value="${wc}" placeholder="15000"
+        style="width:64px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:3px;font-size:12px;"
+        oninput="markQEDirty(${s.id})" />
+    </td>
+    ${bookCells}
+    ${clsCells}
+    ${behCells}
+    <td style="border:1px solid var(--border);padding:3px 2px;text-align:center;">
+      <button onclick="saveQERow(${s.id})"
+        style="font-size:11px;padding:3px 7px;background:var(--primary-dark);color:#fff;border:none;border-radius:5px;cursor:pointer;"
+        id="qe-save-${s.id}">💾</button>
+    </td>
+  </tr>`;
+}
+
+function markQEDirty(stuId){
+  const btn = document.getElementById("qe-save-"+stuId);
+  if(btn) btn.style.background="#E09A00";
+}
+
+function onQEBehChange(sel){
+  sel.style.background = sel.value ? 'var(--primary-light)' : '#fff';
+  markQEDirty(+sel.dataset.stuid);
+}
+
+function saveQERow(stuId){
+  const month = document.getElementById("qe-month")?.value||curMonth;
+  const cls = document.getElementById("qe-cls")?.value||"";
+  const s = students.find(x=>x.id===stuId);
+  if(!s) return;
+  const row = document.getElementById("qe-row-"+stuId);
+  if(!row) return;
+
+  const tmpl = templates[cls+"_"+month]||{};
+  const tmplBooks = tmpl.books||[];
+  // Use same merged classes as render (includes Pictionary etc for readers, level defaults for core)
+  const isReadersBranch2 = cls==="__readers__" || (cls && getBranch(cls)==="readers");
+  const isCoreBranch2 = cls==="__core__" || (cls && getBranch(cls)==="core");
+  const mergeKey2 = isReadersBranch2 ? (cls==="__readers__"?"Picture Book A1":cls)
+                  : isCoreBranch2    ? (cls==="__core__"?null:cls)
+                  : cls;
+  const tmplClssBase2 = tmpl.clss||[];
+  const tmplClss = (isReadersBranch2 || (isCoreBranch2 && mergeKey2))
+    ? mergeWithDefaults(tmplClssBase2, mergeKey2||cls)
+    : tmplClssBase2;
+  const isCore = isCoreCls(cls);
+  const isCls2Tab = s.cls2===cls && s.cls!==cls;
+
+  if(!allData[stuId]) allData[stuId]={};
+  if(!allData[stuId][month]) allData[stuId][month]={type:"monthly",stuId:stuId,name:s.name,cls:s.cls,date:month};
+  const d = allData[stuId][month];
+  const target = isCls2Tab ? (d.cls2Data||(d.cls2Data={})) : d;
+
+  // Shared: SR, 권수, WC
+  const sr = row.querySelector(".qe-sr")?.value||"";
+  const booksVal = row.querySelector(".qe-books")?.value||"";
+  const wc = row.querySelector(".qe-wc")?.value||"";
+  if(sr) d.sr=sr;
+  if(booksVal){
+    const prev = parseFloat((allData[stuId][getPrevMonth(month)]||{}).cumul)||0;
+    d.booksCurr=booksVal;
+    d.cumul = prev + parseFloat(booksVal);
+  }
+  if(wc) d.wc=wc;
+
+  // Books: comp + score → auto-derive voc grade
+  if(tmplBooks.length){
+    const books = tmplBooks.map((tb,bi)=>{
+      const existingBook = (target.books||[]).find(b=>b.name===tb.name)||{name:tb.name};
+      const compSel = row.querySelector(`.qe-grade[data-bidx="${bi}"][data-type="comp"]`);
+      const scoreSel = row.querySelector(`.qe-score[data-bidx="${bi}"]`);
+      if(compSel?.value) existingBook.comp = compSel.value;
+      if(scoreSel?.value){
+        existingBook.score = scoreSel.value;
+        // Auto-derive voc grade from score
+        const g = scoreToGrade(scoreSel.value);
+        if(g) existingBook.voc = g;
+      }
+      return existingBook;
+    });
+    target.books = books;
+  }
+
+  // Classes from template: score input → auto-derive grade
+  if(tmplClss.length){
+    const clss = tmplClss.map((tc,ci)=>{
+      const existingCls = (target.clss||[]).find(c=>c.name===tc.name)||{name:tc.name,score:""};
+      const scoreSel = row.querySelector(`.qe-cls-score[data-cidx="${ci}"]`);
+      if(scoreSel?.value){
+        existingCls.score = scoreSel.value;
+        const g = scoreToGrade(scoreSel.value);
+        if(g) existingCls.grade = g;
+      }
+      return existingCls;
+    });
+    target.clss = clss;
+  }
+
+  // Behavior
+  const beh = {};
+  row.querySelectorAll(".qe-beh").forEach(sel=>{if(sel.value) beh[sel.dataset.key]=sel.value;});
+  if(Object.keys(beh).length) target.beh = {...(target.beh||{}), ...beh};
+
+  // Save button feedback
+  const btn = document.getElementById("qe-save-"+stuId);
+  if(btn){ btn.style.background="var(--teal)"; btn.textContent="✅"; setTimeout(()=>{btn.style.background="var(--primary-dark)";btn.textContent="💾";},1500); }
+  if(row && stuCurMonthDone(s)) row.style.background="var(--teal-light)";
+
+  scheduleFirebaseSave();
+}
+
+function saveAllQuickEntry(){
+  const cls = document.getElementById("qe-cls")?.value||"";
+  const list = students.filter(s=>(s.cls===cls||s.cls2===cls)&&(!s.status||s.status==="active"));
+  list.forEach(s=>saveQERow(s.id));
+  toast(`${list.length}명 저장 완료 ✅`);
+  renderStudents();
+}
+
+function getPrevMonth(month){
+  const idx=MONTHS.indexOf(month);
+  return idx>0?MONTHS[idx-1]:null;
+}
+
+
+// ── Score → Grade auto-conversion ──
+function scoreToGrade(scoreStr){
+  if(!scoreStr) return null;
+  // Parse "15/20", "8/10", "90", "75%" etc.
+  const fracMatch = scoreStr.match(/(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/);
+  if(fracMatch){
+    const pct = (parseFloat(fracMatch[1]) / parseFloat(fracMatch[2])) * 100;
+    return pctToGrade(pct);
+  }
+  const pctMatch = scoreStr.match(/(\d+(?:\.\d+)?)/);
+  if(pctMatch){
+    const val = parseFloat(pctMatch[1]);
+    // If value > 100, assume raw score — can't convert without max
+    if(val <= 100) return pctToGrade(val);
+  }
+  return null;
+}
+
+function pctToGrade(pct){
+  if(pct >= 90) return "A";
+  if(pct >= 75) return "B";
+  if(pct >= 60) return "C";
+  return "D";
+}
+
+function applyScoreToGrade(input){
+  const grade = scoreToGrade(input.value);
+  if(!grade) return;
+  const tr = input.closest("tr");
+  if(!tr) return;
+
+  // For book rows: Score → Vocabulary Test (2nd grade-grp)
+  // For class rows: Score → Grade (only grade-grp)
+  const allGradeGrps = tr.querySelectorAll(".grade-grp");
+  // If 2 grade-grps (comp + voc), target the 2nd (voc). If 1, target that one.
+  const gradeGrp = allGradeGrps.length >= 2
+    ? allGradeGrps[1]   // Vocabulary Test grade-grp
+    : allGradeGrps[0];  // Classes grade-grp
+  if(!gradeGrp) return;
+
+  gradeGrp.querySelectorAll(".gbtn").forEach(b=>{
+    b.className = "gbtn";
+    if(b.textContent===grade) selG(b, grade);
+  });
+}
+
 
 // ── Init ──
 // Init is now triggered by doLogin() — only show login screen first
