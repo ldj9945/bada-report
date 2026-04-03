@@ -4179,18 +4179,32 @@ let LOGIN_ACCOUNTS = [
 
 let currentUser = null;
 
-function doLogin(){
+async function doLogin(){
   const id = document.getElementById("login-id").value.trim();
   const pw = document.getElementById("login-pw").value;
   const errEl = document.getElementById("login-error");
+
+  // 로그인 버튼 로딩 표시
+  const loginBtn = document.querySelector("#login-screen button[onclick='doLogin()']");
+  if(loginBtn){ loginBtn.textContent="로딩 중..."; loginBtn.disabled=true; }
+
+  // Firebase에서 최신 계정 정보 먼저 로드
+  try {
+    if(window._fbReady && window._db){
+      const snap = await window._fbGetDoc(window._fbDoc(window._db, "bada-data", "main"));
+      if(snap.exists() && snap.data().loginAccounts?.length){
+        LOGIN_ACCOUNTS.splice(0, LOGIN_ACCOUNTS.length, ...snap.data().loginAccounts);
+      }
+    }
+  } catch(e){ console.warn("Firebase account load failed, using local accounts", e); }
+
+  if(loginBtn){ loginBtn.textContent="로그인 Login"; loginBtn.disabled=false; }
 
   const account = LOGIN_ACCOUNTS.find(a=>a.id===id && a.pw===pw);
   if(!account){
     errEl.style.display="block";
     document.getElementById("login-pw").value="";
     document.getElementById("login-pw").focus();
-    // Shake animation
-    const form = errEl.closest("div");
     return;
   }
   // Success
