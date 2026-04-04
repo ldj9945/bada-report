@@ -1395,48 +1395,8 @@ const READERS_DEFAULT_CLASSES = [
   {name:"Writing Workbook (라이팅 워크북)", hwFormat:"8/8"},
 ];
 
-const CORE_DEFAULT_CLASSES = {
-  "Junior Starter 1": [
-    {name:"The Best Reading HW", hwFormat:""},
-    {name:"Phonics HW", hwFormat:""},
-  ],
-  "Junior Starter 2": [
-    {name:"The Best Reading HW", hwFormat:""},
-    {name:"Phonics HW", hwFormat:""},
-  ],
-  "Junior Mover 1": [
-    {name:"The Best Reading HW", hwFormat:""},
-    {name:"Writing HW", hwFormat:""},
-  ],
-  "Junior Mover 2": [
-    {name:"The Best Reading HW", hwFormat:""},
-    {name:"Writing HW", hwFormat:""},
-  ],
-  "Junior Flyer": [
-    {name:"The Best Reading HW", hwFormat:""},
-    {name:"Writing HW", hwFormat:""},
-  ],
-  "Core Starter 1": [
-    {name:"Reading For Vocab HW", hwFormat:""},
-    {name:"Writing Framework HW", hwFormat:""},
-  ],
-  "Core Starter 2": [
-    {name:"Reading For Vocab HW", hwFormat:""},
-    {name:"Writing Framework HW", hwFormat:""},
-  ],
-  "Core Mover 1": [
-    {name:"Reading For Vocab HW", hwFormat:""},
-    {name:"Creative Writing HW", hwFormat:""},
-  ],
-  "Core Mover 2": [
-    {name:"Reading For Vocab HW", hwFormat:""},
-    {name:"Creative Writing HW", hwFormat:""},
-  ],
-};
-
 function getDefaultClasses(cls){
   if(getBranch(cls)==="readers") return READERS_DEFAULT_CLASSES;
-  if(getBranch(cls)==="core") return CORE_DEFAULT_CLASSES[cls]||[];
   return [];
 }
 
@@ -2768,6 +2728,7 @@ function saveTemplate(){
   document.getElementById("tmpl-saved-bar").style.display = "block";
   document.getElementById("tmpl-empty-bar").style.display = "none";
   toast("✅ 템플릿 저장 완료!");
+  scheduleFirebaseSave();
 }
 
 function applyTemplateToAll(){
@@ -4217,7 +4178,7 @@ async function doLogin(){
   if(meta) meta.innerHTML = `선생님 전용 리포트 시스템 &nbsp;|&nbsp; <strong>${account.name}</strong> 님 환영해요! <button onclick="doLogout()" style="margin-left:8px;font-size:11px;padding:2px 10px;border:1px solid rgba(255,255,255,.4);border-radius:20px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer;">로그아웃</button>`;
 
   // Load Firebase data
-  fbInitAfterLogin();
+  await fbInitAfterLogin();
 
   // Show data save/load buttons
   const dataBtns = document.getElementById("header-data-btns");
@@ -4456,16 +4417,60 @@ async function fbSaveAll(){
   if(!window._fbReady || !window._db) return;
   try {
     const db = window._db;
+
+    // ── Pull latest from Firebase first to avoid overwriting other teachers' data ──
+    const latestSnap = await window._fbGetDoc(window._fbDoc(db, "bada-data", FB_DOC_ID));
+    if(latestSnap.exists()){
+      const remote = latestSnap.data();
+      // Deep merge allData: remote entries not in local memory take priority
+      // (other teachers may have saved data we don't have locally)
+      if(remote.allData){
+        Object.keys(remote.allData).forEach(stuId=>{
+          if(!allData[stuId]){
+            // Student data from another teacher - add to local
+            allData[stuId] = remote.allData[stuId];
+          } else {
+            // Merge month-by-month: remote months not in local are preserved
+            Object.keys(remote.allData[stuId]).forEach(month=>{
+              if(!allData[stuId][month]){
+                allData[stuId][month] = remote.allData[stuId][month];
+              }
+            });
+          }
+        });
+      }
+      // Merge students: add any students from remote not in local
+      if(remote.students){
+        remote.students.forEach(rs=>{
+          if(!students.find(s=>s.id===rs.id)) students.push(rs);
+        });
+      }
+      // Merge teachers: add any teachers from remote not in local
+      if(remote.teachers){
+        remote.teachers.forEach(rt=>{
+          if(!teachers.find(t=>t.id===rt.id)) teachers.push(rt);
+        });
+      }
+      // Merge templates
+      if(remote.templates){
+        Object.keys(remote.templates).forEach(k=>{
+          if(!templates[k]) templates[k] = remote.templates[k];
+        });
+      }
+    }
+
+    // ── Now save the merged state ──
     const snapshot = {
       students: JSON.parse(JSON.stringify(students)),
       teachers: JSON.parse(JSON.stringify(teachers)),
       allData: JSON.parse(JSON.stringify(allData)),
+      templates: JSON.parse(JSON.stringify(templates)),
       loginAccounts: JSON.parse(JSON.stringify(LOGIN_ACCOUNTS)),
       updatedAt: new Date().toISOString(),
       updatedBy: currentUser?.name||"unknown"
     };
     await window._fbSetDoc(window._fbDoc(db, "bada-data", FB_DOC_ID), snapshot);
-    // Update save indicator
+
     const ind = document.getElementById("fb-save-indicator");
     if(ind){ ind.textContent="✅ 저장됨 " + new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"}); ind.style.color="#1D9E75"; }
   } catch(e){
@@ -4485,6 +4490,7 @@ async function fbLoadAll(){
     if(data.students) students.splice(0,students.length,...data.students);
     if(data.teachers) teachers.splice(0,teachers.length,...data.teachers);
     if(data.allData){ Object.keys(allData).forEach(k=>delete allData[k]); Object.assign(allData,data.allData); }
+    if(data.templates){ Object.keys(templates).forEach(k=>delete templates[k]); Object.assign(templates, data.templates); }
     if(data.loginAccounts?.length) LOGIN_ACCOUNTS.splice(0,LOGIN_ACCOUNTS.length,...data.loginAccounts);
     return true;
   } catch(e){
@@ -4506,6 +4512,8 @@ function scheduleFirebaseSave(){
 }
 
 // Load data from Firebase after login
+let _fbUnsubscribe = null; // real-time listener unsubscribe
+
 async function fbInitAfterLogin(){
   const ind = document.getElementById("fb-save-indicator");
   if(ind){ ind.style.display="flex"; ind.textContent="🔄 데이터 불러오는 중..."; ind.style.color="#8A9BB0"; }
@@ -4518,6 +4526,61 @@ async function fbInitAfterLogin(){
   } else {
     if(ind){ ind.textContent="🆕 새 데이터"; ind.style.color="#8A9BB0"; }
   }
+
+  // ── Start real-time listener ──
+  if(_fbUnsubscribe) _fbUnsubscribe(); // clean up old listener
+  if(!window._fbReady || !window._db || !window._fbOnSnapshot) return;
+  const db = window._db;
+  _fbUnsubscribe = window._fbOnSnapshot(
+    window._fbDoc(db, "bada-data", FB_DOC_ID),
+    (snap) => {
+      if(!snap.exists()) return;
+      // Skip if we just saved (avoid echo)
+      if(_fbSaveTimer) return;
+      const remote = snap.data();
+      // Only sync if someone else saved (not us)
+      if(remote.updatedBy && remote.updatedBy === currentUser?.name) return;
+
+      let changed = false;
+      // Merge allData from remote
+      if(remote.allData){
+        Object.keys(remote.allData).forEach(stuId=>{
+          if(!allData[stuId]){
+            allData[stuId] = remote.allData[stuId];
+            changed = true;
+          } else {
+            Object.keys(remote.allData[stuId]).forEach(month=>{
+              if(!allData[stuId][month]){
+                allData[stuId][month] = remote.allData[stuId][month];
+                changed = true;
+              } else {
+                // Check if remote month is newer (has more data)
+                const remoteMonth = remote.allData[stuId][month];
+                const localMonth = allData[stuId][month];
+                // If remote has comment and local doesn't, update
+                if(remoteMonth.comment && !localMonth.comment){
+                  allData[stuId][month] = remoteMonth;
+                  changed = true;
+                }
+              }
+            });
+          }
+        });
+      }
+      // Merge students
+      if(remote.students){
+        remote.students.forEach(rs=>{
+          if(!students.find(s=>s.id===rs.id)){ students.push(rs); changed=true; }
+        });
+      }
+      if(changed){
+        renderStudents();
+        const ind2 = document.getElementById("fb-save-indicator");
+        if(ind2){ ind2.textContent="🔄 동기화됨 " + new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"}); ind2.style.color="#5A7299"; }
+      }
+    },
+    (err) => { console.warn("Firebase listener error:", err); }
+  );
 }
 
 
@@ -4641,13 +4704,9 @@ function renderQuickEntry(){
   // For readers: always include default classes (Pictionary, Weekly Reading, Writing Workbook)
   const tmplClssBase = tmpl.clss||[];
   const isReadersBranch = cls==="__readers__" || (cls && getBranch(cls)==="readers");
-  const isCoreBranch = cls==="__core__" || (cls && getBranch(cls)==="core");
-  // For branch-wide selections, use first level of that branch as default key
-  const mergeKey = isReadersBranch ? (cls==="__readers__"?"Picture Book A1":cls)
-                 : isCoreBranch    ? (cls==="__core__"?null:cls)
-                 : cls;
-  const tmplClss = (isReadersBranch || (isCoreBranch && mergeKey))
-    ? mergeWithDefaults(tmplClssBase, mergeKey||cls)
+  const mergeKey = isReadersBranch ? (cls==="__readers__"?"Picture Book A1":cls) : cls;
+  const tmplClss = isReadersBranch
+    ? mergeWithDefaults(tmplClssBase, mergeKey)
     : tmplClssBase;
 
   // Populate teacher select
@@ -4865,13 +4924,10 @@ function saveQERow(stuId){
   const tmplBooks = tmpl.books||[];
   // Use same merged classes as render (includes Pictionary etc for readers, level defaults for core)
   const isReadersBranch2 = cls==="__readers__" || (cls && getBranch(cls)==="readers");
-  const isCoreBranch2 = cls==="__core__" || (cls && getBranch(cls)==="core");
-  const mergeKey2 = isReadersBranch2 ? (cls==="__readers__"?"Picture Book A1":cls)
-                  : isCoreBranch2    ? (cls==="__core__"?null:cls)
-                  : cls;
+  const mergeKey2 = isReadersBranch2 ? (cls==="__readers__"?"Picture Book A1":cls) : cls;
   const tmplClssBase2 = tmpl.clss||[];
-  const tmplClss = (isReadersBranch2 || (isCoreBranch2 && mergeKey2))
-    ? mergeWithDefaults(tmplClssBase2, mergeKey2||cls)
+  const tmplClss = isReadersBranch2
+    ? mergeWithDefaults(tmplClssBase2, mergeKey2)
     : tmplClssBase2;
   const isCore = isCoreCls(cls);
   const isCls2Tab = s.cls2===cls && s.cls!==cls;
@@ -4941,8 +4997,17 @@ function saveQERow(stuId){
 
 function saveAllQuickEntry(){
   const cls = document.getElementById("qe-cls")?.value||"";
-  const list = students.filter(s=>(s.cls===cls||s.cls2===cls)&&(!s.status||s.status==="active"));
+  const month = document.getElementById("qe-month")?.value||curMonth;
+  const list = students.filter(s=>{
+    if(cls && cls!=="__readers__" && cls!=="__core__") return (s.cls===cls||s.cls2===cls)&&(!s.status||s.status==="active");
+    if(cls==="__readers__") return getBranch(s.cls)==="readers"&&(!s.status||s.status==="active");
+    if(cls==="__core__") return getBranch(s.cls)==="core"&&(!s.status||s.status==="active");
+    return !s.status||s.status==="active";
+  });
+  // Save each row (each calls scheduleFirebaseSave with debounce)
   list.forEach(s=>saveQERow(s.id));
+  // Explicit final save after all rows processed
+  scheduleFirebaseSave();
   toast(`${list.length}명 저장 완료 ✅`);
   renderStudents();
 }
