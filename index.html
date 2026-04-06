@@ -1847,7 +1847,6 @@ function removeRubricBlock(btn, cls){
 
 // Sync rubric topics → Grade: Classes & Homework
 function syncClassesFromRubric(){
-  // Collect current rubric entries
   const rubricEntries = [];
   document.querySelectorAll(".w-topic-block").forEach(block=>{
     const topicInput = block.querySelector("input[type=text]");
@@ -1869,11 +1868,15 @@ function syncClassesFromRubric(){
     const grade = gradeEl?.textContent||"";
     rubricEntries.push({name:"Speaking: "+topic, score:score?score+"/20":"", grade, _rubric:true});
   });
-  // Remove old rubric rows from cls-tbody, keep manual rows
+
   const tbody = document.getElementById("cls-tbody");
+  if(!tbody) return;
+
+  // ── Remove ALL existing rubric rows first (prevent duplicates) ──
   tbody.querySelectorAll("tr[data-rubric]").forEach(r=>r.remove());
-  // Prepend rubric rows
-  rubricEntries.forEach(entry=>{
+
+  // ── Add rubric rows once at top ──
+  [...rubricEntries].reverse().forEach(entry=>{
     const tr = document.createElement("tr");
     tr.dataset.rubric = "1";
     tr.style.cssText = "background:var(--primary-light);";
