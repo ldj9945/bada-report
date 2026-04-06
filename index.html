@@ -1774,7 +1774,7 @@ function addWritingTopic(data={}){
     <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:2px;">Writing Mechanics</div>
     ${tableHTML}`;
   document.getElementById("writing-topics").appendChild(div);
-  if(totalSaved>0) syncClassesFromRubric();
+  if(totalSaved>0 && !_rubricLoading) syncClassesFromRubric();
 }
 
 function addSpeakingTopic(data={}){
@@ -1811,7 +1811,7 @@ function addSpeakingTopic(data={}){
     <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:2px;">Oral Presentation Rubric</div>
     ${tableHTML}`;
   document.getElementById("speaking-topics").appendChild(div);
-  if(totalSaved>0) syncClassesFromRubric();
+  if(totalSaved>0 && !_rubricLoading) syncClassesFromRubric();
 }
 
 function onRubricClick(btn){
@@ -1846,6 +1846,8 @@ function removeRubricBlock(btn, cls){
 }
 
 // Sync rubric topics → Grade: Classes & Homework
+let _rubricLoading = false; // prevent sync during loadRubrics
+
 function syncClassesFromRubric(){
   const rubricEntries = [];
   document.querySelectorAll(".w-topic-block").forEach(block=>{
@@ -1915,10 +1917,13 @@ function collectRubrics(){
 
 function loadRubrics(data){
   if(!data) return;
+  _rubricLoading = true; // prevent sync during load
   document.getElementById("writing-topics").innerHTML="";
   document.getElementById("speaking-topics").innerHTML="";
   (data.wTopics||[]).forEach(t=>addWritingTopic(t));
   (data.sTopics||[]).forEach(t=>addSpeakingTopic(t));
+  _rubricLoading = false;
+  syncClassesFromRubric(); // sync once after all topics loaded
 }
 
 function initRubrics(){ /* topics are added dynamically */ }
