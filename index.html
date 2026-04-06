@@ -2288,9 +2288,10 @@ function buildPreview(d, stuCls){
     ${curr?`<text x="85" y="${pad+bh-currH-3}" text-anchor="middle" font-size="8" fill="${cfg.primaryDark}" font-family="sans-serif">${curr}</text>`:""}
   </svg>`;
 
-  // ── Rubric preview (바다코어 only) ──
+  // ── Rubric preview (바다코어 + 바다리더스 Chapter Book 1+) ──
   let rubricSec = "";
-  if(isCore && d.rubric){
+  const stuCls_ = stuCls||d.cls||"";
+  if(hasWritingRubric(stuCls_) && d.rubric){
     const r = d.rubric;
     const thS = `background:${cfg.primaryLight};padding:5px 6px;text-align:center;font-size:9px;color:${cfg.primaryDark};border:1px solid ${cfg.border};font-weight:700;`;
     const tdS = `padding:5px 6px;border:1px solid ${cfg.border};text-align:center;`;
@@ -2335,10 +2336,10 @@ function buildPreview(d, stuCls){
       ["4-Wow!","3-Well done!","2-Getting!","1-Uh oh"], "Speaking", 20, sScoreToGrade);
 
     rubricSec = `
-      <div style="font-family:Nunito,sans-serif;font-size:12px;font-weight:800;text-align:center;margin:14px 0 10px;padding:6px;background:${cfg.primary};color:#fff;border-radius:5px;">✍️ Writing Rubric 바다코어 라이팅 평가표</div>
+      <div style="font-family:Nunito,sans-serif;font-size:12px;font-weight:800;text-align:center;margin:14px 0 10px;padding:6px;background:${cfg.primary};color:#fff;border-radius:5px;">✍️ Writing Rubric 라이팅 평가표</div>
       <div style="font-size:9px;color:#8A9BB0;margin-bottom:8px;">A: Excellent 20-15pt | B: Great 14-10pt | C: Good 9-5pt | D: Building 4-0pt</div>
       ${wHTML||"<p style='font-size:11px;color:#aaa;text-align:center;'>Writing 데이터 없음</p>"}
-      <div style="font-family:Nunito,sans-serif;font-size:12px;font-weight:800;text-align:center;margin:14px 0 10px;padding:6px;background:${cfg.primary};color:#fff;border-radius:5px;">🎤 Speaking Rubric 바다코어 스피킹 평가표</div>
+      <div style="font-family:Nunito,sans-serif;font-size:12px;font-weight:800;text-align:center;margin:14px 0 10px;padding:6px;background:${cfg.primary};color:#fff;border-radius:5px;">🎤 Speaking Rubric 스피킹 평가표</div>
       <div style="font-size:9px;color:#8A9BB0;margin-bottom:8px;">A: Excellent 16-12pt | B: Great 11-9pt | C: Good 8-4pt | D: Building 3-0pt</div>
       ${sHTML||"<p style='font-size:11px;color:#aaa;text-align:center;'>Speaking 데이터 없음</p>"}`;
   }
