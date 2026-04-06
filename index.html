@@ -877,7 +877,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 
   <div class="card">
     <div class="card-title" style="cursor:pointer;" onclick="toggleCmt()">
-      💌 학부모 코멘트 Message to Parents <span style="font-size:11px;font-weight:400;color:#aaa;">(선택사항 Optional)</span>
+      💌 학부모 코멘트 Message to Parents <span id="comment-cls-badge" style="font-size:11px;font-weight:600;color:var(--primary-dark);margin-left:4px;"></span><span style="font-size:11px;font-weight:400;color:#aaa;">(선택사항 Optional)</span>
       <span id="cmt-icon" style="margin-left:auto;font-size:11px;color:var(--muted);">▼ 펼치기</span>
     </div>
     <div id="cmt-body" style="display:block;">
@@ -920,6 +920,13 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
           <option value="">학생 선택...</option>
         </select>
       </div>
+      <div class="fg" id="q-branch-wrap" style="display:none;">
+        <label>반 선택 Class Branch</label>
+        <select id="q-branch" class="sel-input" style="font-size:13px;padding:8px 11px;" onchange="refreshQPreview()">
+          <option value="primary">메인반 Primary</option>
+          <option value="secondary">추가반 Secondary</option>
+        </select>
+      </div>
       <div class="fg">
         <label>시작 월 Start Month</label>
         <select id="q-month1" class="sel-input" style="font-size:13px;padding:8px 11px;" onchange="refreshQPreview()">
@@ -956,7 +963,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
     <div id="q-ai-loading" style="display:none;font-size:12px;color:var(--primary-dark);padding:10px 0;">⏳ Claude AI가 코멘트를 작성하고 있어요...</div>
     <div class="grid2" style="gap:14px;">
       <div class="fg">
-        <label style="color:var(--primary-dark);font-weight:700;">📝 Overall Comment</label>
+        <label style="color:var(--primary-dark);font-weight:700;">📝 Overall Comment <span id="q-branch-label" style="font-size:11px;font-weight:400;color:var(--muted);"></span></label>
         <textarea id="q-comment-overall" rows="6" placeholder="Overall progress comment will appear here..."></textarea>
       </div>
       <div class="fg">
@@ -1688,6 +1695,9 @@ function selStudent(id){
   updateFTeacherDropdown(selStu.cls, autoTid);
   activeCls=1;
   updateVocLabel();
+  // Reset comment badge
+  const badge = document.getElementById("comment-cls-badge");
+  if(badge) badge.textContent = selStu.cls2 ? `(${selStu.cls})` : "";
   setMonth(curMonth);
   renderMonthTabs();
   updateClsTabs();
@@ -3164,6 +3174,16 @@ function initQStudentSelect(){
 }
 
 function onQStudentChange(){
+  const stuId = +document.getElementById("q-student")?.value;
+  const stu = students.find(s=>s.id===stuId);
+  const wrap = document.getElementById("q-branch-wrap");
+  if(wrap) wrap.style.display = (stu?.cls2) ? "block" : "none";
+  // Reset branch to primary when student changes
+  const branchSel = document.getElementById("q-branch");
+  if(branchSel) branchSel.value = "primary";
+  // Update comment branch label
+  const lbl = document.getElementById("q-branch-label");
+  if(lbl) lbl.textContent = stu?.cls2 ? `(${stu.cls})` : "";
   refreshQPreview();
 }
 
@@ -3199,14 +3219,28 @@ function refreshQPreview(){
     warn.style.display = missing.length?"block":"none";
     if(missing.length) warn.textContent=`ℹ️ 데이터 없는 달: ${missing.join(", ")} (있는 달만 반영됨)`;
   }
-  document.getElementById("q-preview-inner").innerHTML = buildQPreview(stu, qdata);
+  const qBranch = document.getElementById("q-branch")?.value||"primary";
+  // Update comment branch label
+  const lbl = document.getElementById("q-branch-label");
+  if(lbl && stu?.cls2){
+    lbl.textContent = qBranch==="secondary" ? `(${stu.cls2})` : `(${stu.cls})`;
+  }
+  document.getElementById("q-preview-inner").innerHTML = buildQPreview(stu, qdata, qBranch);
 }
 
 // ── Build quarterly PDF preview ──
-function buildQPreview(stu, qdata){
-  const cfg = getConfig(stu.cls);
+function buildQPreview(stu, qdata, branch="primary"){
+  // branch: "primary" = stu.cls data, "secondary" = stu.cls2 / cls2Data
+  const isSecondary = branch==="secondary" && stu.cls2;
+  const activeCls_ = isSecondary ? stu.cls2 : stu.cls;
+  const cfg = getConfig(activeCls_);
   const months = qdata.map(x=>x.month);
-  const datas = qdata.map(x=>x.data||{});
+  // For secondary branch, use cls2Data; for primary, use main data
+  const datas = qdata.map(x=>{
+    if(!x.data) return {};
+    if(isSecondary) return {...x.data, ...(x.data.cls2Data||{}), sr:x.data.sr, booksCurr:x.data.booksCurr, wc:x.data.wc, cumul:x.data.cumul};
+    return x.data;
+  });
 
   // Aggregate data
   const srScores = datas.map(d=>parseFloat(d.sr)||null);
@@ -3495,7 +3529,7 @@ function buildQPreview(stu, qdata){
       <div class="rp-mc" style="border-right:1px solid ${cfg.border};"><div class="rp-ml" style="color:#8A9BB0;">Teacher</div><div class="rp-mv">${getStudentTeachers(stu).map(t=>t.name).join(" / ")||"—"}</div></div>
     </div>
 
-    ${renderReadersRoadmap(stu, [...datas].reverse().find(d=>d.sr)?.sr||"", cfg)}
+    ${renderReadersRoadmap({...stu, cls:activeCls_}, [...datas].reverse().find(d=>d.sr)?.sr||"", cfg)}
 
     <!-- SR Score Trend -->
     <div style="font-family:Nunito,sans-serif;font-size:12px;font-weight:800;text-align:center;margin:14px 0 10px;padding:6px;background:${cfg.primary};color:#fff;border-radius:5px;">SR Score Trend</div>
@@ -3691,6 +3725,7 @@ async function downloadQPDF(){
   toast("PDF 생성 중... ⏳");
   const stuId=+document.getElementById("q-student")?.value;
   const stu=students.find(s=>s.id===stuId)||{name:"학생"};
+  const qBranch = document.getElementById("q-branch")?.value||"primary";
   await generateAndDownloadPDF({
     name:stu.name,cls:stu.cls,date:"Quarterly",
     type:"quarterly",teacher:getStudentTeachers(stu).map(t=>t.name).join("/")
@@ -3730,11 +3765,13 @@ function switchClsTab(n){
   const cls = n===1 ? selStu.cls : selStu.cls2;
   applyTheme(cls);
   updateVocLabel();
-  // Update teacher dropdown for the active tab
-  // For readers tab (primary cls is readers), show first readers teacher
-  // For core tab or secondary class, show that branch's teacher
   const tid = n===1 ? (selStu.teacherId||"") : (selStu.teacherId2||"");
   updateFTeacherDropdown(cls, tid);
+  // Update comment badge to show which class
+  const badge = document.getElementById("comment-cls-badge");
+  if(badge && selStu?.cls2){
+    badge.textContent = n===1 ? `(${selStu.cls})` : `(${selStu.cls2})`;
+  }
   loadTabData();
 }
 
@@ -3749,8 +3786,19 @@ function saveCurrentTabData(){
   const d = collect();
   if(!allData[selStu.id]) allData[selStu.id]={};
   if(!allData[selStu.id][curMonth]) allData[selStu.id][curMonth]={};
+
+  // ── Shared fields: save SR, 권수, 누적, WC to main data ──
+  if(d.sr) allData[selStu.id][curMonth].sr = d.sr;
+  if(d.booksCurr){
+    allData[selStu.id][curMonth].booksCurr = d.booksCurr;
+    allData[selStu.id][curMonth].cumul = d.cumul;
+  }
+  if(d.wc) allData[selStu.id][curMonth].wc = d.wc;
+
+  // ── Tab-2 specific fields only ──
   allData[selStu.id][curMonth].cls2Data={
-    books:d.books, clss:d.clss, beh:d.beh, rubric:d.rubric
+    books:d.books, clss:d.clss, beh:d.beh, rubric:d.rubric,
+    comment: document.getElementById("f-comment")?.value||""
   };
   scheduleFirebaseSave();
 }
@@ -3762,11 +3810,18 @@ function loadTabData(){
   if(activeCls===2){
     // Load secondary class data
     const cls2Data=monthData.cls2Data||{};
+
+    // ── Shared fields: SR, 권수, 누적, WC from main data ──
+    document.getElementById("f-sr").value = monthData.sr||"";
+    document.getElementById("f-books-curr").value = monthData.booksCurr||"";
+    document.getElementById("f-cumul").value = monthData.cumul||"";
+    document.getElementById("f-wc").value = monthData.wc||"";
+
+    // ── Tab-2 specific fields ──
     document.getElementById("book-tbody").innerHTML="";
     (cls2Data.books||[]).forEach(b=>addBook(b));
     document.getElementById("cls-tbody").innerHTML="";
     const cls2=selStu.cls2||"";
-    const defaults2=getDefaultClasses(cls2);
     const withDef=mergeWithDefaults(cls2Data.clss||[], cls2);
     withDef.forEach(c=>addCls(c));
     renderBeh(cls2Data.beh||{});
@@ -3774,6 +3829,9 @@ function loadTabData(){
     document.getElementById("writing-topics").innerHTML="";
     document.getElementById("speaking-topics").innerHTML="";
     loadRubrics(cls2Data.rubric||null);
+    // Load cls2-specific comment (separate from primary class comment)
+    const commentEl = document.getElementById("f-comment");
+    if(commentEl) commentEl.value = cls2Data.comment||"";
     // Update f-class to show secondary class
     const fCls=document.getElementById("f-class");
     if(fCls) fCls.value=selStu.cls2;
