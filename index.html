@@ -2139,6 +2139,7 @@ function collect(){
   });
   const clss=[];
   document.querySelectorAll("#cls-tbody tr").forEach(r=>{
+    if(r.dataset.rubric) return; // skip auto-added Writing/Speaking rows
     const ins=r.querySelectorAll("input");
     const g=r.querySelector(".grade-grp");
     const s=g?.querySelector(".gbtn[class*='sel-']");
