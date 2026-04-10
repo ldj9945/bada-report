@@ -1510,7 +1510,16 @@ async function fbLoadAll(){
     if(!snap.exists()) return false;
     const data = snap.data();
 
-    if(data.students) students.splice(0,students.length,...data.students);
+    // students: 배열 또는 숫자키 객체 둘 다 처리
+    if(data.students){
+      let stuArr = data.students;
+      // updateDoc으로 students.0/1/2... 저장됐을 경우 객체로 오는 케이스 처리
+      if(!Array.isArray(stuArr) && typeof stuArr === 'object'){
+        const keys = Object.keys(stuArr).sort((a,b)=>+a-+b);
+        stuArr = keys.map(k=>stuArr[k]).filter(Boolean);
+      }
+      if(stuArr.length) students.splice(0,students.length,...stuArr);
+    }
     if(data.teachers) teachers.splice(0,teachers.length,...data.teachers);
     if(data.templates){ Object.keys(templates).forEach(k=>delete templates[k]); Object.assign(templates, data.templates); }
     if(data.loginAccounts?.length) LOGIN_ACCOUNTS.splice(0,LOGIN_ACCOUNTS.length,...data.loginAccounts);
@@ -1544,24 +1553,18 @@ async function fbSaveAll(){
     const db = window._db;
     const docRef = window._fbDoc(db, "bada-data", FB_DOC_ID);
 
-    // ── updateDoc: dot-notation paths — NEVER overwrites unrelated fields ──
+    // ── updateDoc with dot-notation: 내가 쓰는 경로만 업데이트, 다른 경로 절대 안 건드림 ──
     const updates = {};
     updates["updatedAt"] = new Date().toISOString();
     updates["updatedBy"] = currentUser?.name||"unknown";
 
-    // teachers, templates, loginAccounts: small arrays, safe to overwrite
+    // students/teachers/templates/loginAccounts: 배열로 저장 (정상 로드 보장)
+    updates["students"] = JSON.parse(JSON.stringify(students));
     updates["teachers"] = JSON.parse(JSON.stringify(teachers));
     updates["templates"] = JSON.parse(JSON.stringify(templates));
     updates["loginAccounts"] = JSON.parse(JSON.stringify(LOGIN_ACCOUNTS));
 
-    // students: write each student individually by index to avoid full-array overwrite
-    students.forEach((s, i) => {
-      updates["students." + i] = JSON.parse(JSON.stringify(s));
-    });
-    // Also write the length so we know the array size
-    updates["studentsCount"] = students.length;
-
-    // allData: each student/month as a separate path
+    // allData: 각 학생/월을 독립 경로로 저장 → 동시 저장 시 충돌 없음
     Object.keys(allData).forEach(stuId => {
       Object.keys(allData[stuId]).forEach(month => {
         const safeMonth = month.replace("/", "_");
@@ -1573,15 +1576,14 @@ async function fbSaveAll(){
     if(snap.exists()){
       await window._fbUpdateDoc(docRef, updates);
     } else {
-      // First time: build proper structure for setDoc
+      // 최초 생성
       const initial = {
         updatedAt: updates["updatedAt"],
         updatedBy: updates["updatedBy"],
         students: JSON.parse(JSON.stringify(students)),
-        studentsCount: students.length,
-        teachers: updates["teachers"],
-        templates: updates["templates"],
-        loginAccounts: updates["loginAccounts"],
+        teachers: JSON.parse(JSON.stringify(teachers)),
+        templates: JSON.parse(JSON.stringify(templates)),
+        loginAccounts: JSON.parse(JSON.stringify(LOGIN_ACCOUNTS)),
         allData: {}
       };
       Object.keys(allData).forEach(stuId => {
