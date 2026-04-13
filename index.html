@@ -4923,8 +4923,15 @@ async function fbInitAfterLogin(){
               const fields = ['comment','sr','booksCurr','cumul','wc','date','name',
                               'cls','teacher','rubric','beh','books','clss','cls2Data'];
               fields.forEach(f=>{
-                const lEmpty = (f==='books'||f==='clss') ? !l[f]?.length : (l[f]===undefined||l[f]===null||l[f]==='');
-                const rHas   = (f==='books'||f==='clss') ? r[f]?.length>0 : (r[f]!==undefined&&r[f]!==null&&r[f]!=='');
+                // beh/rubric은 객체이므로 Object.keys로 비어있는지 체크
+                const isObj = (f==='beh'||f==='rubric'||f==='cls2Data');
+                const isArr = (f==='books'||f==='clss');
+                const lEmpty = isArr ? !l[f]?.length
+                             : isObj ? (!l[f] || Object.keys(l[f]).length===0)
+                             : (l[f]===undefined||l[f]===null||l[f]==='');
+                const rHas   = isArr ? r[f]?.length>0
+                             : isObj ? (r[f] && Object.keys(r[f]).length>0)
+                             : (r[f]!==undefined&&r[f]!==null&&r[f]!=='');
                 if(lEmpty && rHas){
                   l[f] = JSON.parse(JSON.stringify(r[f]));
                   changed = true;
