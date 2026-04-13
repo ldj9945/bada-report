@@ -2774,8 +2774,8 @@ async function bulkDL(){
     pairs.push({d:monthData, cls:stu?.cls, name:stu?.name, month:selMonth});
     if(stu?.cls2 && monthData.cls2Data){
       const cls2D=monthData.cls2Data;
-      const d2={...monthData, books:cls2D.books||[], clss:cls2D.clss||[], beh:cls2D.beh||{}, rubric:cls2D.rubric||null, cls:stu.cls2};
-      pairs.push({d:d2, cls:stu.cls2, name:stu.name+"("+stu.cls2+")", month:selMonth});
+      const d2={...monthData, books:cls2D.books||[], clss:cls2D.clss||[], beh:cls2D.beh||{}, rubric:cls2D.rubric||null, comment:cls2D.comment||"", cls:stu.cls2};
+      pairs.push({d:d2, cls:stu.cls2, name:stu.name+"("+stu.cls2+")", month:selMonth, isCls2:true});
     }
   });
   if(!pairs.length) return toast("저장된 데이터가 없습니다");
@@ -2790,7 +2790,8 @@ async function bulkDL(){
     const zip = new JSZip();
     for(let i=0;i<total;i++){
       const {d,cls}=pairs[i];
-      const fname = `BaDa_${d.name||"학생"}_${(d.date||selMonth).replace(/ /g,"").replace("/","_")}.pdf`;
+      const branchSuffix = pairs[i].isCls2 ? `_${(pairs[i].cls||"cls2").replace(/ /g,"_")}` : "";
+      const fname = `BaDa_${d.name||"학생"}${branchSuffix}_${(d.date||selMonth).replace(/ /g,"").replace("/","_")}.pdf`;
       document.getElementById("bulk-msg").textContent=`${d.name||"학생"} PDF 생성 중... (${i+1}/${total})`;
       document.getElementById("bulk-prog").style.width=Math.round(((i+0.5)/total)*100)+"%";
       document.getElementById("bulk-lbl").textContent=`${i} / ${total}`;
@@ -2850,8 +2851,8 @@ async function bulkDLZip(){
     pairs.push({d:monthData, cls:stu?.cls, name:stu?.name, month:selMonth});
     if(stu?.cls2 && monthData.cls2Data){
       const cls2D=monthData.cls2Data;
-      const d2={...monthData, books:cls2D.books||[], clss:cls2D.clss||[], beh:cls2D.beh||{}, rubric:cls2D.rubric||null, cls:stu.cls2};
-      pairs.push({d:d2, cls:stu.cls2, name:stu.name+"("+stu.cls2+")", month:selMonth});
+      const d2={...monthData, books:cls2D.books||[], clss:cls2D.clss||[], beh:cls2D.beh||{}, rubric:cls2D.rubric||null, comment:cls2D.comment||"", cls:stu.cls2};
+      pairs.push({d:d2, cls:stu.cls2, name:stu.name+"("+stu.cls2+")", month:selMonth, isCls2:true});
     }
   });
   if(!pairs.length) return toast("저장된 데이터가 없습니다");
