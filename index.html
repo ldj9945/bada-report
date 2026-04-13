@@ -2687,8 +2687,10 @@ function goPreview(){
     // Build preview for secondary class with shared reading data
     const monthData=allData[selStu.id]?.[curMonth]||{};
     const cls2D=monthData.cls2Data||{};
+    // 2반 선생님 이름 찾기
+    const cls2TeacherName = selStu.teacherId2 ? (teachers.find(t=>t.id===selStu.teacherId2)?.name||d.teacher||"") : (d.teacher||"");
     d={...d, books:cls2D.books||[], clss:cls2D.clss||[], beh:cls2D.beh||{}, rubric:cls2D.rubric||null,
-       cls:selStu.cls2, name:selStu.name};
+       cls:selStu.cls2, name:selStu.name, teacher:cls2TeacherName};
     cls=selStu.cls2;
   }
   document.getElementById("preview-inner").innerHTML=buildPreview(d, cls);
@@ -2722,7 +2724,8 @@ async function dlPDF(){
     // Secondary class PDF
     const monthData=allData[selStu.id]?.[curMonth]||{};
     const cls2D=monthData.cls2Data||{};
-    const d2={...monthData, books:cls2D.books||[], clss:cls2D.clss||[], beh:cls2D.beh||{}, rubric:cls2D.rubric||null, cls:selStu.cls2};
+    const cls2TeacherName2 = selStu.teacherId2 ? (teachers.find(t=>t.id===selStu.teacherId2)?.name||monthData.teacher||"") : (monthData.teacher||"");
+    const d2={...monthData, books:cls2D.books||[], clss:cls2D.clss||[], beh:cls2D.beh||{}, rubric:cls2D.rubric||null, cls:selStu.cls2, teacher:cls2TeacherName2};
     await generateAndDownloadPDF(d2, selStu.cls2);
   } else {
     const d=collect();
@@ -2774,7 +2777,9 @@ async function bulkDL(){
     pairs.push({d:monthData, cls:stu?.cls, name:stu?.name, month:selMonth});
     if(stu?.cls2 && monthData.cls2Data){
       const cls2D=monthData.cls2Data;
-      const d2={...monthData, books:cls2D.books||[], clss:cls2D.clss||[], beh:cls2D.beh||{}, rubric:cls2D.rubric||null, comment:cls2D.comment||"", cls:stu.cls2};
+      // 2반 선생님 이름 찾기 (teacherId2 기준)
+      const cls2Teacher = stu.teacherId2 ? (teachers.find(t=>t.id===stu.teacherId2)?.name||monthData.teacher||"") : (monthData.teacher||"");
+      const d2={...monthData, books:cls2D.books||[], clss:cls2D.clss||[], beh:cls2D.beh||{}, rubric:cls2D.rubric||null, comment:cls2D.comment||"", cls:stu.cls2, teacher:cls2Teacher};
       pairs.push({d:d2, cls:stu.cls2, name:stu.name+"("+stu.cls2+")", month:selMonth, isCls2:true});
     }
   });
@@ -2851,7 +2856,9 @@ async function bulkDLZip(){
     pairs.push({d:monthData, cls:stu?.cls, name:stu?.name, month:selMonth});
     if(stu?.cls2 && monthData.cls2Data){
       const cls2D=monthData.cls2Data;
-      const d2={...monthData, books:cls2D.books||[], clss:cls2D.clss||[], beh:cls2D.beh||{}, rubric:cls2D.rubric||null, comment:cls2D.comment||"", cls:stu.cls2};
+      // 2반 선생님 이름 찾기 (teacherId2 기준)
+      const cls2Teacher = stu.teacherId2 ? (teachers.find(t=>t.id===stu.teacherId2)?.name||monthData.teacher||"") : (monthData.teacher||"");
+      const d2={...monthData, books:cls2D.books||[], clss:cls2D.clss||[], beh:cls2D.beh||{}, rubric:cls2D.rubric||null, comment:cls2D.comment||"", cls:stu.cls2, teacher:cls2Teacher};
       pairs.push({d:d2, cls:stu.cls2, name:stu.name+"("+stu.cls2+")", month:selMonth, isCls2:true});
     }
   });
@@ -4194,7 +4201,8 @@ async function dlBothPDFs(){
   // Secondary class
   const monthData=allData[selStu.id]?.[curMonth]||{};
   const cls2D=monthData.cls2Data||{};
-  const d2={...monthData, books:cls2D.books||[], clss:cls2D.clss||[], beh:cls2D.beh||{}, rubric:cls2D.rubric||null, cls:selStu.cls2};
+  const cls2TeacherBoth = selStu.teacherId2 ? (teachers.find(t=>t.id===selStu.teacherId2)?.name||monthData.teacher||"") : (monthData.teacher||"");
+  const d2={...monthData, books:cls2D.books||[], clss:cls2D.clss||[], beh:cls2D.beh||{}, rubric:cls2D.rubric||null, cls:selStu.cls2, teacher:cls2TeacherBoth};
   await generateAndDownloadPDF(d2, selStu.cls2);
   toast("두 반 PDF 다운로드 완료! ✅");
 }
