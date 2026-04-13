@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root {
   --primary:#378ADD; --primary-light:#E6F1FB; --primary-dark:#185FA5;
@@ -284,6 +285,12 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
     <div style="height:1px;background:var(--border);margin:8px 14px;"></div>
     <div class="sidebar-sec">관리자 Admin</div>
     <div class="sidebar-item" onclick="showPage('accounts')"><span>🔑</span><div><div>계정 관리</div><div style="font-size:10px;opacity:.7;">Account Management</div></div></div>
+    <div class="sidebar-item" onclick="saveDataJSON()" style="color:var(--teal);">
+      <span>💾</span><div><div>전체 백업 다운로드</div><div style="font-size:10px;opacity:.7;">JSON 파일로 저장</div></div>
+    </div>
+    <div class="sidebar-item" onclick="restoreFromJSON()" style="color:var(--amber);">
+      <span>📂</span><div><div>백업에서 복원</div><div style="font-size:10px;opacity:.7;">JSON 파일로 복원</div></div>
+    </div>
   </div>
 </div>
 
@@ -490,15 +497,22 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
     <div class="bulk-bar" id="bulk-bar" style="display:none;">
       <span><span id="bulk-cnt">0</span>명 선택됨 · <span id="bulk-month-label">2026년 3월</span></span>
       <div style="display:flex;gap:8px;">
+        <button class="btn" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);padding:6px 12px;font-size:12px;" onclick="toggleSelAll()" id="sel-all-btn">전체 선택</button>
         <button class="btn" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);padding:6px 12px;font-size:12px;" onclick="clearSel()">선택 해제</button>
-        <button class="btn" style="background:#fff;color:var(--primary-dark);padding:6px 14px;font-size:12px;font-weight:700;" onclick="bulkDL()">⬇️ 일괄 PDF 다운로드</button>
+        <button class="btn" style="background:#fff;color:var(--primary-dark);padding:6px 14px;font-size:12px;font-weight:700;" onclick="bulkDL()">⬇️ 개별 PDF 다운로드</button>
+        <button class="btn" style="background:var(--teal);color:#fff;padding:6px 14px;font-size:12px;font-weight:700;" onclick="bulkDLZip()">🗜️ ZIP으로 다운로드</button>
       </div>
     </div>
     <div style="overflow-x:auto;">
       <table class="stu-table" id="stu-table">
         <thead>
           <tr>
-            <th style="width:32px;"></th>
+            <th style="width:44px;text-align:center;">
+              <div onclick="toggleSelAll()" title="전체 선택/해제" style="cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;">
+                <div class="chk" id="chk-all" style="margin:0 auto;pointer-events:none;"></div>
+                <span style="font-size:9px;color:var(--muted);font-weight:600;">전체</span>
+              </div>
+            </th>
             <th>이름 Name</th>
             <th>레벨 Level</th>
             <th>선생님 Teacher</th>
@@ -1134,7 +1148,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 
 <div class="modal-backdrop" id="bulk-modal" style="display:none;">
   <div class="modal">
-    <h3>📥 일괄 PDF 다운로드</h3>
+    <h3>📥 PDF 다운로드 (2개↑ ZIP)</h3>
     <p id="bulk-msg">PDF를 생성하고 있습니다...</p>
     <div class="prog-wrap"><div class="prog-fill" id="bulk-prog" style="width:0%"></div></div>
     <div class="prog-lbl" id="bulk-lbl">0 / 0</div>
@@ -1757,11 +1771,65 @@ function renderStudents(){
 function hl(t,q){ if(!q) return t; return t.replace(new RegExp(`(${q})`,"gi"),"<mark style='background:#FFF3B0;border-radius:2px;'>$1</mark>"); }
 
 function toggleSel(e,id){ e.stopPropagation(); selectedIds.has(id)?selectedIds.delete(id):selectedIds.add(id); renderStudents(); }
+function toggleSelAll(){
+  // 현재 필터된 학생 목록 기준으로 전체 선택/해제
+  const filtered = getFilteredStudents();
+  const allSelected = filtered.length > 0 && filtered.every(s=>selectedIds.has(s.id));
+  if(allSelected){
+    filtered.forEach(s=>selectedIds.delete(s.id));
+  } else {
+    filtered.forEach(s=>selectedIds.add(s.id));
+  }
+  // Update button label
+  const btn = document.getElementById("sel-all-btn");
+  if(btn){
+    const nowAll = filtered.length > 0 && filtered.every(s=>selectedIds.has(s.id));
+    btn.textContent = nowAll ? "전체 해제" : "전체 선택";
+  }
+  renderStudents();
+}
+function getFilteredStudents(){
+  const search = document.getElementById("stu-search")?.value.toLowerCase()||"";
+  const levelF = document.getElementById("level-filter")?.value||"";
+  const teacherF = document.getElementById("teacher-filter")?.value||"";
+  const statusF = document.getElementById("status-filter")?.value||"";
+  return students.filter(s=>{
+    if(search && !s.name.toLowerCase().includes(search)) return false;
+    if(levelF && s.cls!==levelF && s.cls2!==levelF) return false;
+    if(teacherF){
+      const tids = [s.teacherId,s.teacherId1b,s.teacherId2].filter(Boolean);
+      if(!tids.includes(teacherF)) return false;
+    }
+    if(statusF==="done" && !stuCurMonthDone(s)) return false;
+    if(statusF==="pend" && stuCurMonthDone(s)) return false;
+    if(statusF==="active" && s.status && s.status!=="active") return false;
+    if(statusF==="leave" && s.status!=="leave") return false;
+    if(statusF==="out" && s.status!=="out") return false;
+    if(!statusF || statusF==="active"){ if(s.status==="out") return false; }
+    return true;
+  });
+}
 function clearSel(){ selectedIds.clear(); renderStudents(); }
 function updateBulkBar(){
   const n=selectedIds.size;
   document.getElementById("bulk-bar").style.display=n?"flex":"none";
   document.getElementById("bulk-cnt").textContent=n;
+  // 전체선택 체크박스 상태 업데이트
+  const chkAll = document.getElementById("chk-all");
+  if(chkAll){
+    const filtered = getFilteredStudents();
+    const allSel = filtered.length > 0 && filtered.every(s=>selectedIds.has(s.id));
+    const someSel = filtered.some(s=>selectedIds.has(s.id));
+    chkAll.textContent = allSel ? "✓" : someSel ? "–" : "";
+    chkAll.className = "chk" + (allSel ? " on" : someSel ? " on" : "");
+  }
+  // 전체선택 버튼 텍스트 업데이트
+  const selAllBtn = document.getElementById("sel-all-btn");
+  if(selAllBtn){
+    const filtered = getFilteredStudents();
+    const allSel2 = filtered.length > 0 && filtered.every(s=>selectedIds.has(s.id));
+    selAllBtn.textContent = allSel2 ? "전체 해제" : "전체 선택";
+  }
 }
 
 function addStudent(){
@@ -2669,6 +2737,30 @@ function syncBulkMonthLabel(){
   const lbl=document.getElementById("bulk-month-label");
   if(sel&&lbl) lbl.textContent=sel.options[sel.selectedIndex]?.text||"";
 }
+// PDF를 Blob으로 생성 (파일 저장 없이 Blob 반환)
+async function generatePDFBlob(d, stuCls){
+  const tmp = document.createElement("div");
+  tmp.style.cssText = "position:fixed;left:-9999px;top:0;";
+  tmp.innerHTML = buildPreview(d, stuCls);
+  document.body.appendChild(tmp);
+  await new Promise(r=>setTimeout(r,150));
+  try {
+    const target = tmp.querySelector(".rp");
+    const cv = await html2canvas(target,{scale:2,useCORS:true,backgroundColor:"#ffffff"});
+    const img = cv.toDataURL("image/png");
+    const {jsPDF} = window.jspdf;
+    const pdf = new jsPDF("p","mm","a4");
+    const pw = pdf.internal.pageSize.getWidth();
+    const ph = pdf.internal.pageSize.getHeight();
+    const ih = pw*(cv.height/cv.width);
+    if(ih<=ph) pdf.addImage(img,"PNG",0,0,pw,ih);
+    else { let y=0; while(y<ih){ if(y>0)pdf.addPage(); pdf.addImage(img,"PNG",0,-y,pw,ih); y+=ph; } }
+    return pdf.output("blob");
+  } finally {
+    document.body.removeChild(tmp);
+  }
+}
+
 async function bulkDL(){
   const ids=[...selectedIds];
   if(!ids.length) return toast("학생을 선택해주세요");
@@ -2679,9 +2771,7 @@ async function bulkDL(){
     const stu=students.find(s=>s.id===id);
     const monthData=sd[selMonth];
     if(!monthData) return;
-    // Primary class PDF
     pairs.push({d:monthData, cls:stu?.cls, name:stu?.name, month:selMonth});
-    // Secondary class PDF (dual-class students)
     if(stu?.cls2 && monthData.cls2Data){
       const cls2D=monthData.cls2Data;
       const d2={...monthData, books:cls2D.books||[], clss:cls2D.clss||[], beh:cls2D.beh||{}, rubric:cls2D.rubric||null, cls:stu.cls2};
@@ -2689,25 +2779,154 @@ async function bulkDL(){
     }
   });
   if(!pairs.length) return toast("저장된 데이터가 없습니다");
+
   const modal=document.getElementById("bulk-modal");
   modal.style.display="flex";
   const total=pairs.length;
-  for(let i=0;i<total;i++){
-    const {d,cls}=pairs[i];
-    document.getElementById("bulk-msg").textContent=`${d.name||"학생"} (${pairs[i].month}) PDF 생성 중...`;
-    document.getElementById("bulk-prog").style.width=Math.round((i/total)*100)+"%";
-    document.getElementById("bulk-lbl").textContent=`${i} / ${total}`;
-    await new Promise(r=>setTimeout(r,80));
-    await generateAndDownloadPDF(d, cls);
-    await new Promise(r=>setTimeout(r,200));
+  const useZip = total > 1 && window.JSZip;
+
+  if(useZip){
+    // ── ZIP으로 묶어서 다운로드 ──
+    const zip = new JSZip();
+    for(let i=0;i<total;i++){
+      const {d,cls}=pairs[i];
+      const fname = `BaDa_${d.name||"학생"}_${(d.date||selMonth).replace(/ /g,"").replace("/","_")}.pdf`;
+      document.getElementById("bulk-msg").textContent=`${d.name||"학생"} PDF 생성 중... (${i+1}/${total})`;
+      document.getElementById("bulk-prog").style.width=Math.round(((i+0.5)/total)*100)+"%";
+      document.getElementById("bulk-lbl").textContent=`${i} / ${total}`;
+      await new Promise(r=>setTimeout(r,80));
+      const blob = await generatePDFBlob(d, cls);
+      zip.file(fname, blob);
+      await new Promise(r=>setTimeout(r,100));
+    }
+    document.getElementById("bulk-msg").textContent="ZIP 파일 압축 중...";
+    document.getElementById("bulk-prog").style.width="95%";
+    const zipBlob = await zip.generateAsync({type:"blob"}, (meta)=>{
+      document.getElementById("bulk-prog").style.width=Math.round(95+meta.percent*0.05)+"%";
+    });
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement("a");
+    const dateStr = (selMonth||"").replace("/","_");
+    a.href=url; a.download=`BaDa_리포트_${dateStr}_${total}명.zip`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } else {
+    // ── 1개 또는 JSZip 없을 때: 개별 다운로드 ──
+    for(let i=0;i<total;i++){
+      const {d,cls}=pairs[i];
+      document.getElementById("bulk-msg").textContent=`${d.name||"학생"} (${pairs[i].month}) PDF 생성 중...`;
+      document.getElementById("bulk-prog").style.width=Math.round((i/total)*100)+"%";
+      document.getElementById("bulk-lbl").textContent=`${i} / ${total}`;
+      await new Promise(r=>setTimeout(r,80));
+      await generateAndDownloadPDF(d, cls);
+      await new Promise(r=>setTimeout(r,200));
+    }
   }
+
   document.getElementById("bulk-prog").style.width="100%";
   document.getElementById("bulk-lbl").textContent=`${total} / ${total}`;
-  document.getElementById("bulk-msg").textContent="완료!";
+  document.getElementById("bulk-msg").textContent=useZip&&total>1?"ZIP 다운로드 완료! 🎉":"완료!";
   await new Promise(r=>setTimeout(r,800));
   modal.style.display="none";
-  toast(`${total}개 PDF 다운로드 완료`);
+  toast(useZip&&total>1 ? `${total}개 PDF → ZIP 다운로드 완료 🎉` : `${total}개 PDF 다운로드 완료`);
   clearSel();
+}
+
+async function bulkDLZip(){
+  const ids=[...selectedIds];
+  if(!ids.length) return toast("학생을 선택해주세요");
+  if(ids.length === 1){
+    // 1명이면 그냥 개별 다운로드
+    return bulkDL();
+  }
+  const selMonth=document.getElementById("list-month-sel")?.value||curMonth;
+  const pairs=[];
+  ids.forEach(id=>{
+    const sd=allData[id]||{};
+    const stu=students.find(s=>s.id===id);
+    const monthData=sd[selMonth];
+    if(!monthData) return;
+    pairs.push({d:monthData, cls:stu?.cls, name:stu?.name, month:selMonth});
+    if(stu?.cls2 && monthData.cls2Data){
+      const cls2D=monthData.cls2Data;
+      const d2={...monthData, books:cls2D.books||[], clss:cls2D.clss||[], beh:cls2D.beh||{}, rubric:cls2D.rubric||null, cls:stu.cls2};
+      pairs.push({d:d2, cls:stu.cls2, name:stu.name+"("+stu.cls2+")", month:selMonth});
+    }
+  });
+  if(!pairs.length) return toast("저장된 데이터가 없습니다");
+
+  const modal=document.getElementById("bulk-modal");
+  modal.style.display="flex";
+  document.getElementById("bulk-msg").textContent="ZIP 파일 생성 중...";
+  document.getElementById("bulk-prog").style.width="0%";
+
+  try {
+    const zip = new JSZip();
+    const total = pairs.length;
+
+    for(let i=0; i<total; i++){
+      const {d, cls} = pairs[i];
+      document.getElementById("bulk-msg").textContent=`${d.name||"학생"} PDF 생성 중... (${i+1}/${total})`;
+      document.getElementById("bulk-prog").style.width=Math.round((i/total)*100)+"%";
+      document.getElementById("bulk-lbl").textContent=`${i} / ${total}`;
+
+      // PDF를 blob으로 생성
+      const tmp = document.createElement("div");
+      tmp.style.cssText="position:fixed;left:-9999px;top:0;";
+      tmp.innerHTML = buildPreview(d, cls);
+      document.body.appendChild(tmp);
+      await new Promise(r=>setTimeout(r,100));
+
+      try {
+        const target = tmp.querySelector(".rp");
+        const cv = await html2canvas(target, {scale:2, useCORS:true, backgroundColor:"#ffffff"});
+        const img = cv.toDataURL("image/png");
+        const {jsPDF} = window.jspdf;
+        const pdf = new jsPDF("p","mm","a4");
+        const pw = pdf.internal.pageSize.getWidth();
+        const ph = pdf.internal.pageSize.getHeight();
+        const ih = pw*(cv.height/cv.width);
+        if(ih<=ph) pdf.addImage(img,"PNG",0,0,pw,ih);
+        else { let y=0; while(y<ih){ if(y>0)pdf.addPage(); pdf.addImage(img,"PNG",0,-y,pw,ih); y+=ph; } }
+
+        const safeName = (d.name||"학생").replace(/[\/:*?"<>|]/g,"_");
+        const safeMonth = (d.date||selMonth).replace(/[\s\/]/g,"_");
+        const fileName = `${safeName}_${safeMonth}.pdf`;
+        zip.file(fileName, pdf.output("arraybuffer"));
+      } finally {
+        document.body.removeChild(tmp);
+      }
+      await new Promise(r=>setTimeout(r,50));
+    }
+
+    document.getElementById("bulk-msg").textContent="ZIP 압축 중...";
+    document.getElementById("bulk-prog").style.width="95%";
+
+    const zipBlob = await zip.generateAsync({type:"blob", compression:"DEFLATE", compressionOptions:{level:6}});
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement("a");
+    const date = new Date().toISOString().slice(0,10);
+    const monthLabel = selMonth.replace("/","_");
+    a.href = url;
+    a.download = `BaDa_Reports_${monthLabel}_${date}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    document.getElementById("bulk-prog").style.width="100%";
+    document.getElementById("bulk-lbl").textContent=`${total} / ${total}`;
+    document.getElementById("bulk-msg").textContent="ZIP 다운로드 완료!";
+    await new Promise(r=>setTimeout(r,800));
+    modal.style.display="none";
+    toast(`✅ ${total}개 PDF → ZIP 다운로드 완료`);
+    clearSel();
+  } catch(e){
+    console.error("ZIP error:", e);
+    modal.style.display="none";
+    toast("⚠️ ZIP 생성 실패: " + e.message);
+  }
 }
 
 function toast(msg){
@@ -4527,9 +4746,7 @@ function saveDataJSON(){
     students,
     teachers,
     allData,
-    templates: Object.fromEntries(
-      Object.entries(window._templates||{})
-    ),
+    templates,
     loginAccounts: LOGIN_ACCOUNTS,
   };
 
@@ -4546,6 +4763,43 @@ function saveDataJSON(){
   URL.revokeObjectURL(url);
   toast("💾 데이터 저장 완료! 파일을 안전한 곳에 보관하세요.");
 }
+// ── 데이터 복원 ──
+function restoreFromJSON(){
+  const input = document.createElement("input");
+  input.type = "file"; input.accept = ".json";
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if(!data.students || !data.allData){
+        toast("⚠️ 올바른 백업 파일이 아닙니다"); return;
+      }
+      // Restore to memory
+      students.splice(0, students.length, ...data.students);
+      teachers.splice(0, teachers.length, ...(data.teachers||[]));
+      Object.keys(allData).forEach(k=>delete allData[k]);
+      Object.assign(allData, data.allData||{});
+      Object.keys(templates).forEach(k=>delete templates[k]);
+      Object.assign(templates, data.templates||{});
+      if(data.loginAccounts?.length)
+        LOGIN_ACCOUNTS.splice(0, LOGIN_ACCOUNTS.length, ...data.loginAccounts);
+      // Save to Firebase
+      scheduleFirebaseSave();
+      // Refresh UI
+      renderStudents();
+      renderTeacherList();
+      renderTeacherSelects();
+      toast("✅ 복원 완료! 학생 " + students.length + "명 복원됨");
+    } catch(err){
+      toast("⚠️ 파일 읽기 오류: " + err.message);
+    }
+    input.value = "";
+  };
+  input.click();
+}
+
 
 function loadDataJSON(input){
   const file = input.files[0];
