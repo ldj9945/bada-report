@@ -1427,8 +1427,15 @@ function getDefaultClasses(cls){
 function mergeWithDefaults(tmplClss, cls){
   const defaults = getDefaultClasses(cls);
   if(!defaults.length) return tmplClss;
+  // 이미 저장된 항목은 score/grade 보존
+  // 없는 항목만 기본값으로 추가 - score는 placeholder용 hwFormat이 아닌 빈값으로
   const names = new Set(tmplClss.map(c=>c.name));
-  const extra = defaults.filter(d=>!names.has(d.name));
+  const extra = defaults.filter(d=>!names.has(d.name)).map(d=>({
+    name: d.name,
+    score: "",   // 빈 score — 선생님이 직접 입력해야 함 (hwFormat은 placeholder로만 사용)
+    hwFormat: d.hwFormat||"",  // placeholder 정보 보존
+    grade: ""
+  }));
   return [...tmplClss, ...extra];
 }
 
@@ -2198,7 +2205,8 @@ function setMonth(m){
   // Store previous month cumul for auto-calculation
   window._prevMonthCumul = parseFloat(prevData?.cumul||"") || 0;
   // Auto-apply template if no data yet for this month
-  if(selStu) autoApplyTemplate(selStu.id, selStu.cls, m);
+  // 해당 월 데이터가 전혀 없을 때만 템플릿 자동 적용
+  if(selStu && !allData[selStu.id]?.[m]) autoApplyTemplate(selStu.id, selStu.cls, m);
   // Load current month data if exists
   const sd=allData[selStu?.id]||{};
   if(sd[m]) loadData(sd[m], false);
@@ -2227,7 +2235,7 @@ function addCls(d={}){
   const tr=document.createElement("tr");
   tr.innerHTML=`
     <td><input type="text" placeholder="Reading For Vocabulary" value="${d.name||""}" /></td>
-    <td><input type="text" placeholder="10/10" value="${d.score||""}" oninput="applyScoreToGrade(this)" /></td>
+    <td><input type="text" placeholder="${d.hwFormat||'10/10'}" value="${d.score||""}" oninput="applyScoreToGrade(this)" /></td>
     <td><div class="grade-grp">${["A","B","C","D"].map(g=>`<button type="button" class="gbtn ${d.grade===g?"sel-"+g:""}" onclick="selG(this,'${g}')">${g}</button>`).join("")}</div></td>
     <td><button class="del-btn" onclick="this.closest('tr').remove()">×</button></td>`;
   document.getElementById("cls-tbody").appendChild(tr);
@@ -3127,7 +3135,8 @@ function autoApplyTemplate(stuId, cls, month){
   const key = cls + "_" + month;
   const tmpl = templates[key];
   if(!tmpl) return false;
-  if(allData[stuId]?.[month]?.books?.length) return false; // already has data
+  // 해당 월 데이터가 이미 있으면 절대 덮어쓰지 않음
+  if(allData[stuId]?.[month]) return false; // already has data — never overwrite
   if(!allData[stuId]) allData[stuId] = {};
   const rubric = hasWritingRubric(cls) && (tmpl.writingEnabled ?? isCoreCls(cls)) ? {
     wTopics: (tmpl.wTopics||[]).map(t=>({topic:t.topic, score:"", grade:"", mechanics:{}})),
@@ -3138,7 +3147,7 @@ function autoApplyTemplate(stuId, cls, month){
     cls, month,
     date: month.replace("/", " / "),
     books: tmpl.books.map(b=>({name:b.name, comp:"", voc:"", score:""})),
-    clss: mergeWithDefaults(tmpl.clss.map(c=>({name:c.name, score:c.hwFormat||"", grade:""})), cls),
+    clss: mergeWithDefaults(tmpl.clss.map(c=>({name:c.name, score:"", hwFormat:c.hwFormat||"", grade:""})), cls),
     rubric
   };
   return true;
