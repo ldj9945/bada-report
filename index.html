@@ -285,6 +285,12 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
     <div style="height:1px;background:var(--border);margin:8px 14px;"></div>
     <div class="sidebar-sec">관리자 Admin</div>
     <div class="sidebar-item" onclick="showPage('accounts')"><span>🔑</span><div><div>계정 관리</div><div style="font-size:10px;opacity:.7;">Account Management</div></div></div>
+    <div class="sidebar-item" onclick="showPage('alimtalk')" style="color:#2AA9E0;">
+      <span>💬</span><div><div>알림톡 발송</div><div style="font-size:10px;opacity:.7;">리포트카드 학부모 발송</div></div>
+    </div>
+    <div class="sidebar-item" onclick="showPage('solapi-settings')" style="color:var(--muted);">
+      <span>⚙️</span><div><div>솔라피 설정</div><div style="font-size:10px;opacity:.7;">API Key 설정</div></div>
+    </div>
     <div class="sidebar-item" onclick="saveDataJSON()" style="color:var(--teal);">
       <span>💾</span><div><div>전체 백업 다운로드</div><div style="font-size:10px;opacity:.7;">JSON 파일로 저장</div></div>
     </div>
@@ -1413,9 +1419,9 @@ function hasWritingRubric(cls){
   return false;
 }
 const READERS_DEFAULT_CLASSES = [
-  {name:"Pictionary (픽셔너리: 어휘사전)", hwFormat:"8/8"},
-  {name:"Weekly Reading Recording (위클리리딩 녹음)", hwFormat:"4/4"},
-  {name:"Writing Workbook (라이팅 워크북)", hwFormat:"8/8"},
+  {name:"Pictionary (픽셔너리: 어휘사전)"},
+  {name:"Weekly Reading Recording (위클리리딩 녹음)"},
+  {name:"Writing Workbook (라이팅 워크북)"},
 ];
 
 function getDefaultClasses(cls){
@@ -1427,13 +1433,11 @@ function getDefaultClasses(cls){
 function mergeWithDefaults(tmplClss, cls){
   const defaults = getDefaultClasses(cls);
   if(!defaults.length) return tmplClss;
-  // 이미 저장된 항목은 score/grade 보존
-  // 없는 항목만 기본값으로 추가 - score는 placeholder용 hwFormat이 아닌 빈값으로
+  // 이미 저장된 항목은 score/grade 보존, 없는 항목만 빈값으로 추가
   const names = new Set(tmplClss.map(c=>c.name));
   const extra = defaults.filter(d=>!names.has(d.name)).map(d=>({
     name: d.name,
-    score: "",   // 빈 score — 선생님이 직접 입력해야 함 (hwFormat은 placeholder로만 사용)
-    hwFormat: d.hwFormat||"",  // placeholder 정보 보존
+    score: "",
     grade: ""
   }));
   return [...tmplClss, ...extra];
@@ -1493,7 +1497,8 @@ function applyTheme(cls){
 function showPage(p){
   document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
   document.querySelectorAll(".sidebar-item").forEach(x=>x.classList.remove("active"));
-  document.getElementById("page-"+p).classList.add("active");
+  const pageEl = document.getElementById("page-"+p);
+  if(pageEl) pageEl.classList.add("active");
   const m={students:0,teachers:1,template:2,input:3,quarterly:4,preview:5,accounts:6,quickentry:7};
   document.querySelectorAll(".sidebar-item")[m[p]]?.classList.add("active");
   if(p==="teachers"){
@@ -1507,6 +1512,8 @@ function showPage(p){
     const bothBtn=document.getElementById("dl-both-btn");
     if(bothBtn) bothBtn.style.display=(selStu?.cls2)?"inline-block":"none";
   }
+  if(p==="alimtalk") renderAlimtalkPage();
+  if(p==="solapi-settings") loadSolapiSettings();
 }
 
 function setType(t){
@@ -1574,18 +1581,73 @@ async function fbSaveAll(){
     const db = window._db;
     const docRef = window._fbDoc(db, "bada-data", FB_DOC_ID);
 
-    // ── updateDoc with dot-notation: 내가 쓰는 경로만 업데이트, 다른 경로 절대 안 건드림 ──
+    // ── 저장 전 Firebase 최신값을 읽어서 필드 단위 병합 ──
+    // 다른 선생님이 입력한 score/grade가 내 저장으로 사라지지 않도록
+    const snap = await window._fbGetDoc(docRef);
+    if(snap.exists()){
+      const remote = snap.data();
+      if(remote.allData){
+        Object.keys(remote.allData).forEach(stuId=>{
+          if(!allData[stuId]) allData[stuId] = {};
+          Object.keys(remote.allData[stuId]).forEach(key=>{
+            const month = (key.includes('_')&&!key.includes('/')) ? key.replace('_','/') : key;
+            const r = remote.allData[stuId][key];
+            if(!r) return;
+            if(!allData[stuId][month]){
+              allData[stuId][month] = JSON.parse(JSON.stringify(r));
+            } else {
+              const l = allData[stuId][month];
+              // 스칼라 필드: 로컬에 없으면 remote 값 사용
+              ['comment','sr','booksCurr','cumul','wc','date','name','cls','teacher'].forEach(f=>{
+                if((l[f]===undefined||l[f]===null||l[f]==='') && r[f]) l[f]=r[f];
+              });
+              // beh: 로컬에 없으면 remote 사용
+              if((!l.beh||!Object.keys(l.beh).length) && r.beh && Object.keys(r.beh).length)
+                l.beh = JSON.parse(JSON.stringify(r.beh));
+              // rubric: 로컬에 없으면 remote 사용
+              if(!l.rubric && r.rubric)
+                l.rubric = JSON.parse(JSON.stringify(r.rubric));
+              // clss: 항목별 score/grade 병합 (핵심!)
+              if(r.clss?.length && l.clss?.length){
+                r.clss.forEach(ri=>{
+                  const li = l.clss.find(x=>x.name===ri.name);
+                  if(li){
+                    if(!li.score && ri.score) li.score = ri.score;
+                    if(!li.grade && ri.grade) li.grade = ri.grade;
+                  }
+                });
+              } else if(r.clss?.length && !l.clss?.length){
+                l.clss = JSON.parse(JSON.stringify(r.clss));
+              }
+              // books: 항목별 comp/score 병합
+              if(r.books?.length && l.books?.length){
+                r.books.forEach(ri=>{
+                  const li = l.books.find(x=>x.name===ri.name);
+                  if(li){
+                    if(!li.comp && ri.comp) li.comp = ri.comp;
+                    if(!li.score && ri.score) li.score = ri.score;
+                  }
+                });
+              } else if(r.books?.length && !l.books?.length){
+                l.books = JSON.parse(JSON.stringify(r.books));
+              }
+              // cls2Data 병합
+              if(r.cls2Data && !l.cls2Data)
+                l.cls2Data = JSON.parse(JSON.stringify(r.cls2Data));
+            }
+          });
+        });
+      }
+    }
+
+    // ── 병합된 데이터를 dot-notation으로 저장 ──
     const updates = {};
     updates["updatedAt"] = new Date().toISOString();
     updates["updatedBy"] = currentUser?.name||"unknown";
-
-    // students/teachers/templates/loginAccounts: 배열로 저장 (정상 로드 보장)
     updates["students"] = JSON.parse(JSON.stringify(students));
     updates["teachers"] = JSON.parse(JSON.stringify(teachers));
     updates["templates"] = JSON.parse(JSON.stringify(templates));
     updates["loginAccounts"] = JSON.parse(JSON.stringify(LOGIN_ACCOUNTS));
-
-    // allData: 각 학생/월을 독립 경로로 저장 → 동시 저장 시 충돌 없음
     Object.keys(allData).forEach(stuId => {
       Object.keys(allData[stuId]).forEach(month => {
         const safeMonth = month.replace("/", "_");
@@ -1593,14 +1655,11 @@ async function fbSaveAll(){
       });
     });
 
-    const snap = await window._fbGetDoc(docRef);
     if(snap.exists()){
       await window._fbUpdateDoc(docRef, updates);
     } else {
-      // 최초 생성
       const initial = {
-        updatedAt: updates["updatedAt"],
-        updatedBy: updates["updatedBy"],
+        updatedAt: updates["updatedAt"], updatedBy: updates["updatedBy"],
         students: JSON.parse(JSON.stringify(students)),
         teachers: JSON.parse(JSON.stringify(teachers)),
         templates: JSON.parse(JSON.stringify(templates)),
@@ -1610,8 +1669,7 @@ async function fbSaveAll(){
       Object.keys(allData).forEach(stuId => {
         initial.allData[stuId] = {};
         Object.keys(allData[stuId]).forEach(month => {
-          const safeMonth = month.replace("/", "_");
-          initial.allData[stuId][safeMonth] = JSON.parse(JSON.stringify(allData[stuId][month]));
+          initial.allData[stuId][month.replace("/","_")] = JSON.parse(JSON.stringify(allData[stuId][month]));
         });
       });
       await window._fbSetDoc(docRef, initial);
@@ -2235,7 +2293,7 @@ function addCls(d={}){
   const tr=document.createElement("tr");
   tr.innerHTML=`
     <td><input type="text" placeholder="Reading For Vocabulary" value="${d.name||""}" /></td>
-    <td><input type="text" placeholder="${d.hwFormat||'10/10'}" value="${d.score||""}" oninput="applyScoreToGrade(this)" /></td>
+    <td><input type="text" placeholder="예: 8/8, 4/4" value="${d.score||""}" oninput="applyScoreToGrade(this)" /></td>
     <td><div class="grade-grp">${["A","B","C","D"].map(g=>`<button type="button" class="gbtn ${d.grade===g?"sel-"+g:""}" onclick="selG(this,'${g}')">${g}</button>`).join("")}</div></td>
     <td><button class="del-btn" onclick="this.closest('tr').remove()">×</button></td>`;
   document.getElementById("cls-tbody").appendChild(tr);
@@ -2269,7 +2327,7 @@ function clearForm(resetMeta=true){
   document.getElementById("book-tbody").innerHTML="";
   document.getElementById("cls-tbody").innerHTML="";
   // Add default classes for readers
-  getDefaultClasses(selStu?.cls||"").forEach(c=>addCls({name:c.name, score:c.hwFormat, grade:""}));
+  getDefaultClasses(selStu?.cls||"").forEach(c=>addCls({name:c.name, score:"", grade:""}));
   document.getElementById("writing-topics").innerHTML="";
   document.getElementById("speaking-topics").innerHTML="";
   document.querySelectorAll(".w-score-btn,.s-score-btn").forEach(b=>{
@@ -3111,7 +3169,7 @@ function applyTemplateToAll(){
     });
     const newClss = mergeWithDefaults(tmpl.clss.map(c => {
       const prev = existing?.clss?.find(pc => pc.name === c.name);
-      return {name: c.name, score: prev?.score || c.hwFormat||"", grade: prev?.grade||""};
+      return {name: c.name, score: prev?.score||"", grade: prev?.grade||""};
     }), s.cls);
     const rubric = hasWritingRubric(s.cls) && (tmpl.writingEnabled ?? isCoreCls(s.cls)) ? {
       wTopics: (tmpl.wTopics||[]).map(t=>({topic:t.topic, score:"", grade:"", mechanics:{}})),
@@ -3147,7 +3205,7 @@ function autoApplyTemplate(stuId, cls, month){
     cls, month,
     date: month.replace("/", " / "),
     books: tmpl.books.map(b=>({name:b.name, comp:"", voc:"", score:""})),
-    clss: mergeWithDefaults(tmpl.clss.map(c=>({name:c.name, score:"", hwFormat:c.hwFormat||"", grade:""})), cls),
+    clss: mergeWithDefaults(tmpl.clss.map(c=>({name:c.name, score:"", grade:""})), cls),
     rubric
   };
   return true;
@@ -3165,10 +3223,10 @@ function manualApplyTemplate(){
   // Apply classes (keep rubric-auto rows)
   document.querySelectorAll("#cls-tbody tr:not([data-rubric])").forEach(r=>r.remove());
   const mergedClss = mergeWithDefaults(
-    tmpl.clss.map(c=>({name:c.name, score:c.hwFormat||"", grade:""})),
+    tmpl.clss.map(c=>({name:c.name, score:"", grade:""})),
     selStu.cls
   );
-  mergedClss.forEach(c => addCls({name:c.name, score:c.score||c.hwFormat||"", grade:""}));
+  mergedClss.forEach(c => addCls({name:c.name, score:c.score||"", grade:""}));
   // Apply writing/speaking topics if applicable
   if(hasWritingRubric(selStu.cls) && (tmpl.writingEnabled ?? isCoreCls(selStu.cls))){
     document.getElementById("writing-topics").innerHTML = "";
@@ -3477,6 +3535,9 @@ function editStudent(id){
     const def = LEVEL_TARGET_BOOKS[s.cls];
     if(tbHint) tbHint.textContent = def ? `레벨 기본값: ${def}권` : "";
   }
+  // Phone
+  const phoneEl = document.getElementById("edit-phone");
+  if(phoneEl) phoneEl.value = s.phone||"";
   modal.style.display = "flex";
 }
 
@@ -3500,6 +3561,9 @@ function saveEditStudent(){
   if(t2) s.teacherId2=t2; else delete s.teacherId2;
   const statusRadio = document.querySelector("input[name='edit-status']:checked");
   if(statusRadio) s.status = statusRadio.value;
+  // Phone
+  const phoneVal = document.getElementById("edit-phone")?.value.replace(/-/g,"").trim();
+  if(phoneVal) s.phone = phoneVal; else delete s.phone;
   // Target books
   const tbVal = document.getElementById("edit-target-books")?.value;
   if(tbVal && +tbVal > 0) s.targetBooks = +tbVal;
@@ -4932,18 +4996,34 @@ async function fbInitAfterLogin(){
               const fields = ['comment','sr','booksCurr','cumul','wc','date','name',
                               'cls','teacher','rubric','beh','books','clss','cls2Data'];
               fields.forEach(f=>{
-                // beh/rubric은 객체이므로 Object.keys로 비어있는지 체크
                 const isObj = (f==='beh'||f==='rubric'||f==='cls2Data');
                 const isArr = (f==='books'||f==='clss');
-                const lEmpty = isArr ? !l[f]?.length
-                             : isObj ? (!l[f] || Object.keys(l[f]).length===0)
-                             : (l[f]===undefined||l[f]===null||l[f]==='');
-                const rHas   = isArr ? r[f]?.length>0
-                             : isObj ? (r[f] && Object.keys(r[f]).length>0)
-                             : (r[f]!==undefined&&r[f]!==null&&r[f]!=='');
-                if(lEmpty && rHas){
-                  l[f] = JSON.parse(JSON.stringify(r[f]));
-                  changed = true;
+                if(isArr){
+                  if(!l[f]?.length && r[f]?.length){
+                    // 로컬에 없으면 remote 그대로
+                    l[f] = JSON.parse(JSON.stringify(r[f]));
+                    changed = true;
+                  } else if(l[f]?.length && r[f]?.length && f==='clss'){
+                    // 둘 다 있으면 항목별 score/grade 병합
+                    // remote에 score/grade 있는데 로컬에 없으면 채움
+                    r[f].forEach(ri=>{
+                      const li = l[f].find(x=>x.name===ri.name);
+                      if(li){
+                        if(!li.score && ri.score){ li.score=ri.score; changed=true; }
+                        if(!li.grade && ri.grade){ li.grade=ri.grade; changed=true; }
+                      }
+                    });
+                  }
+                } else {
+                  const isObjF = isObj;
+                  const lEmpty = isObjF ? (!l[f] || Object.keys(l[f]).length===0)
+                               : (l[f]===undefined||l[f]===null||l[f]==='');
+                  const rHas   = isObjF ? (r[f] && Object.keys(r[f]).length>0)
+                               : (r[f]!==undefined&&r[f]!==null&&r[f]!=='');
+                  if(lEmpty && rHas){
+                    l[f] = JSON.parse(JSON.stringify(r[f]));
+                    changed = true;
+                  }
                 }
               });
             }
@@ -5499,6 +5579,385 @@ addCls({name:"Reading For Vocabulary",score:"10/10",grade:"A"});
 addCls({name:"Creative Writing",score:"4/4",grade:"A"});
 initChart(0);
 // Month dropdown initialized via HTML defaults
+
+
+// ══════════════════════════════════════
+// ── 솔라피 알림톡 발송 ──
+// ══════════════════════════════════════
+
+// 솔라피 설정 저장 (localStorage)
+function saveSolapiSettings(){
+  const cfg = {
+    apiKey:     document.getElementById('solapi-api-key')?.value.trim()||'',
+    apiSecret:  document.getElementById('solapi-api-secret')?.value.trim()||'',
+    from:       document.getElementById('solapi-from')?.value.trim()||'',
+    pfId:       document.getElementById('solapi-pf-id')?.value.trim()||'',
+    templateId: document.getElementById('solapi-template-id')?.value.trim()||'',
+    varName:    document.getElementById('solapi-var-name')?.value.trim()||'#{학생이름}',
+    varMonth:   document.getElementById('solapi-var-month')?.value.trim()||'#{월}',
+    varLink:    document.getElementById('solapi-var-link')?.value.trim()||'#{링크}',
+    varTeacher: document.getElementById('solapi-var-teacher')?.value.trim()||'#{선생님}',
+  };
+  try { localStorage.setItem('solapiCfg', JSON.stringify(cfg)); } catch(e){}
+  toast('✅ 솔라피 설정 저장됨!');
+}
+
+function loadSolapiSettings(){
+  try {
+    const cfg = JSON.parse(localStorage.getItem('solapiCfg')||'{}');
+    if(cfg.apiKey)     document.getElementById('solapi-api-key').value = cfg.apiKey;
+    if(cfg.apiSecret)  document.getElementById('solapi-api-secret').value = cfg.apiSecret;
+    if(cfg.from)       document.getElementById('solapi-from').value = cfg.from;
+    if(cfg.pfId)       document.getElementById('solapi-pf-id').value = cfg.pfId;
+    if(cfg.templateId) document.getElementById('solapi-template-id').value = cfg.templateId;
+    if(cfg.varName)    document.getElementById('solapi-var-name').value = cfg.varName;
+    if(cfg.varMonth)   document.getElementById('solapi-var-month').value = cfg.varMonth;
+    if(cfg.varLink)    document.getElementById('solapi-var-link').value = cfg.varLink;
+    if(cfg.varTeacher) document.getElementById('solapi-var-teacher').value = cfg.varTeacher;
+  } catch(e){}
+}
+
+function getSolapiCfg(){
+  try { return JSON.parse(localStorage.getItem('solapiCfg')||'{}'); } catch(e){ return {}; }
+}
+
+// 연결 테스트
+async function testSolapiConnection(){
+  const cfg = getSolapiCfg();
+  const resultEl = document.getElementById('solapi-test-result');
+  if(!cfg.apiKey || !cfg.apiSecret){
+    resultEl.style.display='block';
+    resultEl.style.color='var(--amber)';
+    resultEl.textContent='⚠️ API Key와 Secret을 먼저 입력하고 저장해주세요.';
+    return;
+  }
+  resultEl.style.display='block';
+  resultEl.textContent='🔄 연결 테스트 중...';
+  resultEl.style.color='var(--muted)';
+  try {
+    const date = new Date();
+    const salt = Math.random().toString(36).substring(2,12);
+    const dateStr = date.toISOString();
+    // HMAC-SHA256 signature
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey('raw', enc.encode(cfg.apiSecret),
+      {name:'HMAC',hash:'SHA-256'}, false, ['sign']);
+    const sig = await crypto.subtle.sign('HMAC', key, enc.encode(dateStr+salt));
+    const signature = Array.from(new Uint8Array(sig)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    const auth = `HMAC-SHA256 apiKey=${cfg.apiKey}, date=${dateStr}, salt=${salt}, signature=${signature}`;
+    const res = await fetch('https://api.solapi.com/messages/v4/list?limit=1', {
+      headers: { 'Authorization': auth }
+    });
+    if(res.ok){
+      resultEl.style.color='var(--teal)';
+      resultEl.textContent='✅ 솔라피 연결 성공!';
+    } else {
+      const err = await res.json();
+      resultEl.style.color='var(--red,#D4537E)';
+      resultEl.textContent=`❌ 연결 실패: ${err.errorMessage||res.status}`;
+    }
+  } catch(e){
+    resultEl.style.color='var(--red,#D4537E)';
+    resultEl.textContent=`❌ 오류: ${e.message}`;
+  }
+}
+
+// ── 알림톡 발송 페이지 렌더 ──
+let alimtalkSelected = new Set();
+
+function renderAlimtalkPage(){
+  loadSolapiSettings();
+  const selMonth = document.getElementById('alimtalk-month')?.value||curMonth;
+  const list = students.filter(s=>!s.status||s.status==='active');
+  const el = document.getElementById('alimtalk-student-list');
+  if(!el) return;
+  el.innerHTML = list.length ? list.map(s=>{
+    const hasData = !!(allData[s.id]?.[selMonth]);
+    const hasPhone = !!s.phone;
+    const checked = alimtalkSelected.has(s.id);
+    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);">
+      <input type="checkbox" ${checked?'checked':''} onchange="alimtalkToggle(${s.id},this.checked)"
+        style="width:16px;height:16px;cursor:pointer;" />
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;">${s.name}</div>
+        <div style="font-size:11px;color:var(--muted);">${s.cls}${s.cls2?' + '+s.cls2:''}</div>
+      </div>
+      <div style="font-size:12px;${hasPhone?'color:var(--teal)':'color:var(--amber)'};">
+        ${hasPhone?'📱 '+s.phone:'📵 번호 없음'}
+      </div>
+      <div style="font-size:11px;${hasData?'color:var(--teal)':'color:var(--muted)'};">
+        ${hasData?'✅ 데이터 있음':'— 데이터 없음'}
+      </div>
+    </div>`;
+  }).join('')
+  : '<div style="padding:20px;text-align:center;color:var(--muted);">재원 학생이 없어요</div>';
+
+  updateAlimtalkPreview();
+}
+
+function alimtalkToggle(id, checked){
+  if(checked) alimtalkSelected.add(id);
+  else alimtalkSelected.delete(id);
+  updateAlimtalkPreview();
+}
+function alimtalkSelectAll(){
+  students.filter(s=>!s.status||s.status==='active').forEach(s=>alimtalkSelected.add(s.id));
+  renderAlimtalkPage();
+}
+function alimtalkClearAll(){
+  alimtalkSelected.clear();
+  renderAlimtalkPage();
+}
+function alimtalkSelectMissingPhone(){
+  alimtalkSelected.clear();
+  students.filter(s=>(!s.status||s.status==='active')&&!s.phone).forEach(s=>alimtalkSelected.add(s.id));
+  renderAlimtalkPage();
+}
+
+function updateAlimtalkPreview(){
+  const el = document.getElementById('alimtalk-preview');
+  if(!el) return;
+  const cfg = getSolapiCfg();
+  const selId = [...alimtalkSelected][0];
+  const stu = selId ? students.find(s=>s.id===selId) : students.find(s=>!s.status||s.status==='active');
+  if(!stu){ el.textContent='학생을 선택하면 미리보기가 표시됩니다.'; return; }
+  const month = document.getElementById('alimtalk-month')?.value||curMonth;
+  const monthLabel = month.replace('/','-')+'월';
+  const baseUrl = document.getElementById('alimtalk-base-url')?.value||'https://bada-report-fo8s.vercel.app';
+  const link = `${baseUrl}/report?stu=${stu.id}&month=${month.replace('/','-')}`;
+  const teacher = getStudentTeachers(stu)[0]?.name||'';
+
+  if(cfg.templateId && cfg.pfId){
+    // 알림톡 형식
+    const _lines = ['[바다나무 아카데미]', '', '안녕하세요! '+stu.name+' 학생의 '+monthLabel+' 리포트카드가 준비됐어요.', '', '아래 링크에서 확인해주세요', link, ''];
+    if(teacher) _lines.push('담당 선생님: '+teacher);
+    _lines.push('감사합니다', '바다나무 아카데미');
+    el.textContent = _lines.join('\n');
+  } else {
+    // SMS 형식
+    el.textContent = `[바다나무 아카데미]
+${stu.name} 학생의 ${monthLabel} 리포트카드
+${link}`;
+  }
+}
+
+// ── 실제 발송 ──
+async function sendAlimtalk(){
+  const cfg = getSolapiCfg();
+  if(!cfg.apiKey || !cfg.apiSecret){
+    toast('⚠️ 솔라피 설정 페이지에서 API Key를 먼저 입력해주세요');
+    showPage('solapi-settings'); return;
+  }
+  if(!cfg.from){ toast('⚠️ 발신번호를 설정해주세요'); return; }
+  const targets = [...alimtalkSelected]
+    .map(id=>students.find(s=>s.id===id))
+    .filter(s=>s&&s.phone);
+  if(!targets.length){
+    toast('⚠️ 전화번호가 있는 학생을 선택해주세요');
+    return;
+  }
+  const month = document.getElementById('alimtalk-month')?.value||curMonth;
+  const monthLabel = month.replace('/','-')+'월';
+  const baseUrl = (document.getElementById('alimtalk-base-url')?.value||'https://bada-report-fo8s.vercel.app').replace(/\/$/,'');
+  const statusEl = document.getElementById('alimtalk-status');
+  const resultEl = document.getElementById('alimtalk-results');
+  const resultList = document.getElementById('alimtalk-result-list');
+  statusEl.textContent = `🔄 ${targets.length}명 발송 중...`;
+  resultEl.style.display = 'none';
+  const results = [];
+  for(const stu of targets){
+    const link = `${baseUrl}/report?stu=${stu.id}&month=${month.replace('/','-')}`;
+    const teacher = getStudentTeachers(stu)[0]?.name||'';
+    let msg = {};
+    if(cfg.pfId && cfg.templateId){
+      // 알림톡
+      const variables = {};
+      variables[cfg.varName||'#{학생이름}'] = stu.name;
+      variables[cfg.varMonth||'#{월}'] = monthLabel;
+      variables[cfg.varLink||'#{링크}'] = link;
+      if(teacher) variables[cfg.varTeacher||'#{선생님}'] = teacher;
+      msg = {
+        to: stu.phone, from: cfg.from,
+        kakaoOptions: { pfId: cfg.pfId, templateId: cfg.templateId, variables }
+      };
+    } else {
+      // SMS 폴백
+      msg = {
+        to: stu.phone, from: cfg.from,
+        text: `[바다나무 아카데미]
+${stu.name} 학생의 ${monthLabel} 리포트카드
+${link}`
+      };
+    }
+    try {
+      // HMAC-SHA256 auth
+      const dateStr = new Date().toISOString();
+      const salt = Math.random().toString(36).substring(2,12);
+      const enc = new TextEncoder();
+      const key = await crypto.subtle.importKey('raw', enc.encode(cfg.apiSecret),
+        {name:'HMAC',hash:'SHA-256'}, false, ['sign']);
+      const sig = await crypto.subtle.sign('HMAC', key, enc.encode(dateStr+salt));
+      const signature = Array.from(new Uint8Array(sig)).map(b=>b.toString(16).padStart(2,'0')).join('');
+      const auth = `HMAC-SHA256 apiKey=${cfg.apiKey}, date=${dateStr}, salt=${salt}, signature=${signature}`;
+      const res = await fetch('https://api.solapi.com/messages/v4/send', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':auth},
+        body: JSON.stringify({message: msg})
+      });
+      const data = await res.json();
+      if(res.ok && data.messageId){
+        results.push({name:stu.name, ok:true, msg:'발송 성공'});
+      } else {
+        results.push({name:stu.name, ok:false, msg:data.errorMessage||'발송 실패'});
+      }
+    } catch(e){
+      results.push({name:stu.name, ok:false, msg:e.message});
+    }
+    await new Promise(r=>setTimeout(r,100));
+  }
+  const ok = results.filter(r=>r.ok).length;
+  const fail = results.filter(r=>!r.ok).length;
+  statusEl.textContent = `✅ ${ok}명 성공 / ${fail}명 실패`;
+  resultList.innerHTML = results.map(r=>
+    `<div style="display:flex;gap:10px;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;">
+      <span style="color:${r.ok?'var(--teal)':'var(--red,#D4537E)'};">${r.ok?'✅':'❌'}</span>
+      <span style="font-weight:600;">${r.name}</span>
+      <span style="color:var(--muted);">${r.msg}</span>
+    </div>`).join('');
+  resultEl.style.display = 'block';
+}
+
 </script>
+
+<!-- ══════════════════════════════════════ -->
+<!-- 솔라피 설정 페이지 -->
+<!-- ══════════════════════════════════════ -->
+<div id="page-solapi-settings" class="page" style="display:none;">
+  <div class="card">
+    <div class="card-title">⚙️ 솔라피 API 설정</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">
+      솔라피 콘솔(console.solapi.com) → 계정 설정 → API Key 관리에서 확인하세요.
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div class="fg">
+        <label style="font-size:12px;color:var(--muted);font-weight:600;">API Key</label>
+        <input id="solapi-api-key" type="text" placeholder="NCSLA1xxxxxxxxxxxxxxxx"
+          style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;margin-top:4px;font-family:monospace;" />
+      </div>
+      <div class="fg">
+        <label style="font-size:12px;color:var(--muted);font-weight:600;">API Secret</label>
+        <input id="solapi-api-secret" type="password" placeholder="••••••••••••••••••••••••"
+          style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;margin-top:4px;font-family:monospace;" />
+      </div>
+      <div class="fg">
+        <label style="font-size:12px;color:var(--muted);font-weight:600;">발신번호 (학원 대표번호)</label>
+        <input id="solapi-from" type="tel" placeholder="0212345678 또는 01012345678"
+          style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;margin-top:4px;" />
+      </div>
+      <div class="fg">
+        <label style="font-size:12px;color:var(--muted);font-weight:600;">카카오 채널 ID (pfId) <span style="color:var(--muted);font-weight:400;">— 알림톡 사용 시</span></label>
+        <input id="solapi-pf-id" type="text" placeholder="KA01PFxxxxxxxxxxxxxxxx"
+          style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;margin-top:4px;font-family:monospace;" />
+      </div>
+      <div class="fg">
+        <label style="font-size:12px;color:var(--muted);font-weight:600;">알림톡 템플릿 코드 (templateId) <span style="color:var(--muted);font-weight:400;">— 승인 후 입력</span></label>
+        <input id="solapi-template-id" type="text" placeholder="KA01TP_xxxxxxxxxxxxxxxx"
+          style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;margin-top:4px;font-family:monospace;" />
+      </div>
+      <div class="fg">
+        <label style="font-size:12px;color:var(--muted);font-weight:600;">알림톡 템플릿 변수명 설정</label>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;margin-bottom:6px;">템플릿에 사용된 변수명을 입력하세요 (카카오 승인된 템플릿 기준)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:3px;">학생이름 변수</div>
+            <input id="solapi-var-name" type="text" placeholder="#{학생이름}"
+              style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;" />
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:3px;">월 변수</div>
+            <input id="solapi-var-month" type="text" placeholder="#{월}"
+              style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;" />
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:3px;">링크 변수</div>
+            <input id="solapi-var-link" type="text" placeholder="#{링크}"
+              style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;" />
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:3px;">선생님 변수 (선택)</div>
+            <input id="solapi-var-teacher" type="text" placeholder="#{선생님}"
+              style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:7px 10px;font-size:12px;" />
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:10px;">
+      <button class="btn btn-primary" onclick="saveSolapiSettings()">💾 설정 저장</button>
+      <button class="btn btn-sec" onclick="testSolapiConnection()">🔗 연결 테스트</button>
+    </div>
+    <div id="solapi-test-result" style="margin-top:10px;font-size:13px;display:none;"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<!-- 알림톡 발송 페이지 -->
+<!-- ══════════════════════════════════════ -->
+<div id="page-alimtalk" class="page" style="display:none;">
+  <div class="card">
+    <div class="card-title">💬 알림톡 발송 <span style="font-size:12px;font-weight:400;color:var(--muted);">리포트카드 학부모 발송</span></div>
+
+    <!-- 발송 설정 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+      <div class="fg">
+        <label style="font-size:12px;color:var(--muted);font-weight:600;">발송 월</label>
+        <select id="alimtalk-month" class="sel-input" style="font-size:13px;padding:8px 11px;margin-top:4px;">
+          <option value="2025/09">2025년 9월</option><option value="2025/10">2025년 10월</option>
+          <option value="2025/11">2025년 11월</option><option value="2025/12">2025년 12월</option>
+          <option value="2026/01">2026년 1월</option><option value="2026/02">2026년 2월</option>
+          <option value="2026/03" selected>2026년 3월</option><option value="2026/04">2026년 4월</option>
+          <option value="2026/05">2026년 5월</option><option value="2026/06">2026년 6월</option>
+          <option value="2026/07">2026년 7월</option><option value="2026/08">2026년 8월</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label style="font-size:12px;color:var(--muted);font-weight:600;">PDF 링크 베이스 URL</label>
+        <input id="alimtalk-base-url" type="text" placeholder="https://bada-report-fo8s.vercel.app"
+          style="width:100%;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;margin-top:4px;" />
+      </div>
+    </div>
+
+    <!-- 학생 목록 -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-size:13px;font-weight:700;">발송 대상 학생</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sec" style="font-size:12px;padding:5px 12px;" onclick="alimtalkSelectAll()">전체 선택</button>
+        <button class="btn btn-sec" style="font-size:12px;padding:5px 12px;" onclick="alimtalkClearAll()">전체 해제</button>
+        <button class="btn btn-sec" style="font-size:12px;padding:5px 12px;" onclick="alimtalkSelectMissingPhone()">📵 번호 없는 학생만</button>
+      </div>
+    </div>
+    <div id="alimtalk-student-list" style="max-height:320px;overflow-y:auto;border:1.5px solid var(--border);border-radius:10px;margin-bottom:16px;"></div>
+
+    <!-- 메시지 미리보기 -->
+    <div class="fg" style="margin-bottom:16px;">
+      <label style="font-size:12px;color:var(--muted);font-weight:600;">메시지 미리보기 (첫 번째 학생 기준)</label>
+      <div id="alimtalk-preview" style="margin-top:6px;background:var(--primary-light);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:13px;color:var(--text);white-space:pre-wrap;min-height:80px;"></div>
+    </div>
+
+    <!-- 발송 버튼 -->
+    <div style="display:flex;gap:10px;align-items:center;">
+      <button class="btn btn-primary" style="min-width:140px;" onclick="sendAlimtalk()">
+        💬 알림톡 발송
+      </button>
+      <div id="alimtalk-status" style="font-size:13px;color:var(--muted);"></div>
+    </div>
+
+    <!-- 발송 결과 -->
+    <div id="alimtalk-results" style="margin-top:16px;display:none;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px;">발송 결과</div>
+      <div id="alimtalk-result-list" style="max-height:200px;overflow-y:auto;"></div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
