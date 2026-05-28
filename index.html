@@ -291,6 +291,9 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
     <div class="sidebar-item" onclick="showPage('solapi-settings')" style="color:var(--muted);">
       <span>⚙️</span><div><div>솔라피 설정</div><div style="font-size:10px;opacity:.7;">API Key 설정</div></div>
     </div>
+    <div class="sidebar-item" onclick="migrateFromMain()" style="color:var(--primary);">
+      <span>🔄</span><div><div>데이터 마이그레이션</div><div style="font-size:10px;opacity:.7;">구버전→새구조 1회 실행</div></div>
+    </div>
     <div class="sidebar-item" onclick="saveDataJSON()" style="color:var(--teal);">
       <span>💾</span><div><div>전체 백업 다운로드</div><div style="font-size:10px;opacity:.7;">JSON 파일로 저장</div></div>
     </div>
@@ -1534,36 +1537,62 @@ async function fbLoadAll(){
   if(!window._fbReady || !window._db) return false;
   try {
     const db = window._db;
-    const snap = await window._fbGetDoc(window._fbDoc(db, "bada-data", FB_DOC_ID));
+    const col = window._fbCollection(db, "bada-data");
+
+    // 1. 메타 문서 (students, teachers, templates, loginAccounts)
+    const metaSnap = await window._fbGetDoc(window._fbDoc(db, "bada-data", FB_META_DOC));
+
+    // 구버전 호환: meta 없으면 main 시도
+    const snap = metaSnap.exists() ? metaSnap
+      : await window._fbGetDoc(window._fbDoc(db, "bada-data", "main"));
     if(!snap.exists()) return false;
     const data = snap.data();
 
-    // students: 배열 또는 숫자키 객체 둘 다 처리
     if(data.students){
-      let stuArr = data.students;
-      // updateDoc으로 students.0/1/2... 저장됐을 경우 객체로 오는 케이스 처리
-      if(!Array.isArray(stuArr) && typeof stuArr === 'object'){
-        const keys = Object.keys(stuArr).sort((a,b)=>+a-+b);
-        stuArr = keys.map(k=>stuArr[k]).filter(Boolean);
+      let arr = data.students;
+      if(Array.isArray(arr)){
+        // 배열 형태 (구버전 또는 최초 생성)
+        if(arr.length) students.splice(0,students.length,...arr);
+      } else if(typeof arr==='object'){
+        // dot-notation 저장 형태: {1: {...}, 2: {...}, ...}
+        // 숫자 키로 정렬 후 배열로 변환
+        const sorted = Object.keys(arr)
+          .sort((a,b)=>+a-+b)
+          .map(k=>arr[k])
+          .filter(Boolean);
+        if(sorted.length) students.splice(0,students.length,...sorted);
       }
-      if(stuArr.length) students.splice(0,students.length,...stuArr);
     }
     if(data.teachers) teachers.splice(0,teachers.length,...data.teachers);
-    if(data.templates){ Object.keys(templates).forEach(k=>delete templates[k]); Object.assign(templates, data.templates); }
+    if(data.templates){ Object.keys(templates).forEach(k=>delete templates[k]); Object.assign(templates,data.templates); }
     if(data.loginAccounts?.length) LOGIN_ACCOUNTS.splice(0,LOGIN_ACCOUNTS.length,...data.loginAccounts);
 
-    // allData may be stored in two formats:
-    // 1. New format: allData.stuId.safeMonth (dot-notation via updateDoc)
-    // 2. Old format: allData as a nested object (from old setDoc)
+    // 2. 학생별 문서 로드
     Object.keys(allData).forEach(k=>delete allData[k]);
 
-    if(data.allData){
+    const stuDocs = students.map(s=>
+      window._fbGetDoc(window._fbDoc(db, "bada-data", FB_STU_PREFIX+s.id))
+    );
+    const stuSnaps = await Promise.all(stuDocs);
+
+    stuSnaps.forEach((sSnap, idx)=>{
+      const stu = students[idx];
+      if(!sSnap.exists()) return;
+      const sdata = sSnap.data();
+      allData[stu.id] = {};
+      Object.keys(sdata).forEach(key=>{
+        const month = key.includes('_')&&!key.includes('/') ? key.replace('_','/') : key;
+        allData[stu.id][month] = sdata[key];
+      });
+    });
+
+    // 구버전 호환: main 문서에 allData 있으면 병합
+    if(!metaSnap.exists() && data.allData){
       Object.keys(data.allData).forEach(stuId=>{
-        allData[stuId] = {};
+        if(!allData[stuId]) allData[stuId]={};
         Object.keys(data.allData[stuId]).forEach(key=>{
-          // Convert safeMonth back: 2026_03 → 2026/03
-          const month = key.includes('_') && !key.includes('/') ? key.replace('_', '/') : key;
-          allData[stuId][month] = data.allData[stuId][key];
+          const month = key.includes('_')&&!key.includes('/') ? key.replace('_','/') : key;
+          if(!allData[stuId][month]) allData[stuId][month] = data.allData[stuId][key];
         });
       });
     }
@@ -1579,104 +1608,46 @@ async function fbSaveAll(){
   if(!window._fbReady || !window._db) return;
   try {
     const db = window._db;
-    const docRef = window._fbDoc(db, "bada-data", FB_DOC_ID);
 
-    // ── 저장 전 Firebase 최신값을 읽어서 필드 단위 병합 ──
-    // 다른 선생님이 입력한 score/grade가 내 저장으로 사라지지 않도록
-    const snap = await window._fbGetDoc(docRef);
-    if(snap.exists()){
-      const remote = snap.data();
-      if(remote.allData){
-        Object.keys(remote.allData).forEach(stuId=>{
-          if(!allData[stuId]) allData[stuId] = {};
-          Object.keys(remote.allData[stuId]).forEach(key=>{
-            const month = (key.includes('_')&&!key.includes('/')) ? key.replace('_','/') : key;
-            const r = remote.allData[stuId][key];
-            if(!r) return;
-            if(!allData[stuId][month]){
-              allData[stuId][month] = JSON.parse(JSON.stringify(r));
-            } else {
-              const l = allData[stuId][month];
-              // 스칼라 필드: 로컬에 없으면 remote 값 사용
-              ['comment','sr','booksCurr','cumul','wc','date','name','cls','teacher'].forEach(f=>{
-                if((l[f]===undefined||l[f]===null||l[f]==='') && r[f]) l[f]=r[f];
-              });
-              // beh: 로컬에 없으면 remote 사용
-              if((!l.beh||!Object.keys(l.beh).length) && r.beh && Object.keys(r.beh).length)
-                l.beh = JSON.parse(JSON.stringify(r.beh));
-              // rubric: 로컬에 없으면 remote 사용
-              if(!l.rubric && r.rubric)
-                l.rubric = JSON.parse(JSON.stringify(r.rubric));
-              // clss: 항목별 score/grade 병합 (핵심!)
-              if(r.clss?.length && l.clss?.length){
-                r.clss.forEach(ri=>{
-                  const li = l.clss.find(x=>x.name===ri.name);
-                  if(li){
-                    if(!li.score && ri.score) li.score = ri.score;
-                    if(!li.grade && ri.grade) li.grade = ri.grade;
-                  }
-                });
-              } else if(r.clss?.length && !l.clss?.length){
-                l.clss = JSON.parse(JSON.stringify(r.clss));
-              }
-              // books: 항목별 comp/score 병합
-              if(r.books?.length && l.books?.length){
-                r.books.forEach(ri=>{
-                  const li = l.books.find(x=>x.name===ri.name);
-                  if(li){
-                    if(!li.comp && ri.comp) li.comp = ri.comp;
-                    if(!li.score && ri.score) li.score = ri.score;
-                  }
-                });
-              } else if(r.books?.length && !l.books?.length){
-                l.books = JSON.parse(JSON.stringify(r.books));
-              }
-              // cls2Data 병합
-              if(r.cls2Data && !l.cls2Data)
-                l.cls2Data = JSON.parse(JSON.stringify(r.cls2Data));
-            }
-          });
-        });
-      }
-    }
-
-    // ── 병합된 데이터를 dot-notation으로 저장 ──
-    const updates = {};
-    updates["updatedAt"] = new Date().toISOString();
-    updates["updatedBy"] = currentUser?.name||"unknown";
-    updates["students"] = JSON.parse(JSON.stringify(students));
-    updates["teachers"] = JSON.parse(JSON.stringify(teachers));
-    updates["templates"] = JSON.parse(JSON.stringify(templates));
-    updates["loginAccounts"] = JSON.parse(JSON.stringify(LOGIN_ACCOUNTS));
-    Object.keys(allData).forEach(stuId => {
-      Object.keys(allData[stuId]).forEach(month => {
-        const safeMonth = month.replace("/", "_");
-        updates["allData." + stuId + "." + safeMonth] = JSON.parse(JSON.stringify(allData[stuId][month]));
-      });
-    });
-
-    if(snap.exists()){
-      await window._fbUpdateDoc(docRef, updates);
+    // 1. 메타 문서: students, teachers, templates, loginAccounts
+    const metaRef = window._fbDoc(db, "bada-data", FB_META_DOC);
+    const metaSnap = await window._fbGetDoc(metaRef);
+    const metaData = {
+      students: JSON.parse(JSON.stringify(students)),
+      teachers: JSON.parse(JSON.stringify(teachers)),
+      templates: JSON.parse(JSON.stringify(templates)),
+      loginAccounts: JSON.parse(JSON.stringify(LOGIN_ACCOUNTS)),
+      updatedAt: new Date().toISOString(),
+    };
+    if(metaSnap.exists()){
+      await window._fbUpdateDoc(metaRef, metaData);
     } else {
-      const initial = {
-        updatedAt: updates["updatedAt"], updatedBy: updates["updatedBy"],
-        students: JSON.parse(JSON.stringify(students)),
-        teachers: JSON.parse(JSON.stringify(teachers)),
-        templates: JSON.parse(JSON.stringify(templates)),
-        loginAccounts: JSON.parse(JSON.stringify(LOGIN_ACCOUNTS)),
-        allData: {}
-      };
-      Object.keys(allData).forEach(stuId => {
-        initial.allData[stuId] = {};
-        Object.keys(allData[stuId]).forEach(month => {
-          initial.allData[stuId][month.replace("/","_")] = JSON.parse(JSON.stringify(allData[stuId][month]));
-        });
-      });
-      await window._fbSetDoc(docRef, initial);
+      await window._fbSetDoc(metaRef, metaData);
     }
+
+    // 2. 학생별 문서: allData[stuId] → bada-data/stu-{id}
+    // 월 단위 dot-notation으로 저장 → 같은 학생을 두 선생님이 저장해도
+    // 서로 다른 달/필드를 건드리므로 데이터 손실 없음
+    const saves = Object.keys(allData).map(stuId=>{
+      const stuRef = window._fbDoc(db, "bada-data", FB_STU_PREFIX+stuId);
+      const updates = {};
+      Object.keys(allData[stuId]).forEach(month=>{
+        const safeMonth = month.replace("/","_");
+        const d = allData[stuId][month];
+        // 월 전체를 하나의 경로로 저장 (dot-notation)
+        // Firestore는 중첩 객체를 dot으로 쓰면 해당 경로만 업데이트
+        updates[safeMonth] = JSON.parse(JSON.stringify(d));
+      });
+      // 문서 없으면 생성, 있으면 지정 경로만 업데이트
+      return window._fbSetDoc(stuRef, updates, {merge:true});
+    });
+    await Promise.all(saves);
 
     const ind = document.getElementById("fb-save-indicator");
-    if(ind){ ind.textContent="✅ 저장됨 " + new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"}); ind.style.color="#1D9E75"; }
+    if(ind){
+      ind.textContent = "✅ 저장됨 "+new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"});
+      ind.style.color = "#1D9E75";
+    }
   } catch(e){
     console.error("Firebase save error:", e);
     const ind = document.getElementById("fb-save-indicator");
@@ -2429,10 +2400,11 @@ function saveData(){
       allData[selStu.id][curMonth]=d;
       renderStudents();
       renderMonthTabs();
+      // 탭1 데이터만 저장 (cls2Data 건드리지 않음)
+      fbSavePrimary(selStu.id, curMonth);
     }
     toast("저장 완료 ✅ ("+curMonth+")");
   }
-  scheduleFirebaseSave();
 }
 
 // ── Chart ──
@@ -4203,7 +4175,7 @@ function saveCurrentTabData(){
   if(!allData[selStu.id]) allData[selStu.id]={};
   if(!allData[selStu.id][curMonth]) allData[selStu.id][curMonth]={};
 
-  // ── Shared fields: save SR, 권수, 누적, WC to main data ──
+  // ── 공유 필드: SR, 읽은 책 권수, 누적, WC ──
   if(d.sr) allData[selStu.id][curMonth].sr = d.sr;
   if(d.booksCurr){
     allData[selStu.id][curMonth].booksCurr = d.booksCurr;
@@ -4216,7 +4188,8 @@ function saveCurrentTabData(){
     books:d.books, clss:d.clss, beh:d.beh, rubric:d.rubric,
     comment: document.getElementById("f-comment")?.value||""
   };
-  scheduleFirebaseSave();
+  // cls2Data만 저장 (탭1 바다리더스 데이터 건드리지 않음)
+  fbSaveSecondary(selStu.id, curMonth);
 }
 
 function loadTabData(){
@@ -4227,7 +4200,7 @@ function loadTabData(){
     // Load secondary class data
     const cls2Data=monthData.cls2Data||{};
 
-    // ── Shared fields: SR, 권수, 누적, WC from main data ──
+    // ── 공유 필드: SR, 읽은 책 권수, 누적, WC ──
     document.getElementById("f-sr").value = monthData.sr||"";
     document.getElementById("f-books-curr").value = monthData.booksCurr||"";
     document.getElementById("f-cumul").value = monthData.cumul||"";
@@ -4241,7 +4214,8 @@ function loadTabData(){
     const withDef=mergeWithDefaults(cls2Data.clss||[], cls2);
     withDef.forEach(c=>addCls(c));
     renderBeh(cls2Data.beh||{});
-    // Clear rubric sections fully before loading tab-specific data
+    // Clear rubric auto-rows from cls-tbody before loading tab-specific data
+    document.querySelectorAll("#cls-tbody tr[data-rubric]").forEach(r=>r.remove());
     document.getElementById("writing-topics").innerHTML="";
     document.getElementById("speaking-topics").innerHTML="";
     loadRubrics(cls2Data.rubric||null);
@@ -4252,6 +4226,8 @@ function loadTabData(){
     const fCls=document.getElementById("f-class");
     if(fCls) fCls.value=selStu.cls2;
   } else {
+    // Clear rubric auto-rows before loading tab1 data
+    document.querySelectorAll("#cls-tbody tr[data-rubric]").forEach(r=>r.remove());
     // Load primary class data
     if(monthData && Object.keys(monthData).length>0) loadData(monthData, false);
     else clearForm(false);
@@ -4260,7 +4236,7 @@ function loadTabData(){
     applyTheme(selStu.cls);
     updateVocLabel();
   }
-  syncClassesFromRubric();
+  // syncClassesFromRubric은 loadRubrics 안에서 호출됨 - 여기서 중복 호출 제거
 }
 
 
@@ -4923,7 +4899,8 @@ function loadDataJSON(input){
 // ── Firebase Sync ──
 // ══════════════════════════════════
 
-const FB_DOC_ID = "main"; // single shared document
+const FB_META_DOC = "meta";    // students, teachers, templates, loginAccounts
+const FB_STU_PREFIX = "stu-";   // stu-{id} per student
 
 
 
@@ -4934,9 +4911,126 @@ const _origSaveData = window.saveData;
 
 // Debounced auto-save
 let _fbSaveTimer = null;
+
+
+// ── 기존 데이터 마이그레이션 (main → meta + stu-{id}) ──
+async function migrateFromMain(){
+  if(!window._fbReady || !window._db){ toast("Firebase 연결 필요"); return; }
+  const db = window._db;
+  const mainSnap = await window._fbGetDoc(window._fbDoc(db, "bada-data", "main"));
+  if(!mainSnap.exists()){ toast("마이그레이션할 데이터 없음 (main 문서 없음)"); return; }
+  const data = mainSnap.data();
+  toast("🔄 마이그레이션 중...");
+
+  // meta 저장
+  const metaRef = window._fbDoc(db, "bada-data", FB_META_DOC);
+  await window._fbSetDoc(metaRef, {
+    students: data.students||[],
+    teachers: data.teachers||[],
+    templates: data.templates||{},
+    loginAccounts: data.loginAccounts||[],
+    migratedAt: new Date().toISOString(),
+  });
+
+  // 학생별 문서 저장
+  const allDataSrc = data.allData||{};
+  const saves = Object.keys(allDataSrc).map(stuId=>{
+    const stuRef = window._fbDoc(db, "bada-data", FB_STU_PREFIX+stuId);
+    const stuData = {};
+    Object.keys(allDataSrc[stuId]).forEach(month=>{
+      stuData[month.replace("/","_")] = allDataSrc[stuId][month];
+    });
+    return window._fbSetDoc(stuRef, stuData);
+  });
+  await Promise.all(saves);
+
+  toast("✅ 마이그레이션 완료! 앱을 새로고침하세요.");
+}
+
+// 탭1(바다리더스) 데이터만 저장 - cls2Data 절대 건드리지 않음
+async function fbSavePrimary(stuId, month){
+  if(!window._fbReady || !window._db) return;
+  const d = allData[stuId]?.[month];
+  if(!d) return;
+  try {
+    const safeMonth = month.replace("/","_");
+    const stuRef = window._fbDoc(window._db, "bada-data", FB_STU_PREFIX+stuId);
+    // dot-notation으로 탭1 필드만 지정 → cls2Data는 건드리지 않음
+    const updates = {};
+    const fields = ['sr','booksCurr','cumul','wc','comment','date','name','cls',
+                    'teacher','teacherId','type','books','clss','beh','rubric',
+                    'booksLast','suppl'];
+    fields.forEach(f=>{
+      if(d[f] !== undefined) updates[safeMonth+'.'+f] = d[f] ?? null;
+    });
+    const stuSnap = await window._fbGetDoc(stuRef);
+    if(stuSnap.exists()){
+      await window._fbUpdateDoc(stuRef, updates);
+    } else {
+      // 문서 없으면 월 전체 생성 (cls2Data 제외 - 탭2 데이터 보호)
+      const initData = {...d};
+      delete initData.cls2Data;
+      await window._fbSetDoc(stuRef, {[safeMonth]: initData}, {merge:true});
+    }
+  } catch(e){ console.error("fbSavePrimary error:", e); }
+}
+
+// 탭2(바다코어) cls2Data만 저장 - 탭1 데이터 절대 건드리지 않음
+async function fbSaveSecondary(stuId, month){
+  if(!window._fbReady || !window._db) return;
+  const cls2Data = allData[stuId]?.[month]?.cls2Data;
+  if(!cls2Data) return;
+  try {
+    const safeMonth = month.replace("/","_");
+    const stuRef = window._fbDoc(window._db, "bada-data", FB_STU_PREFIX+stuId);
+    const updates = {
+      [safeMonth+'.cls2Data']: JSON.parse(JSON.stringify(cls2Data))
+    };
+    // 공유 필드: SR, 읽은 책 권수, 누적, WC
+    const d = allData[stuId]?.[month];
+    if(d?.sr) updates[safeMonth+'.sr'] = d.sr;
+    if(d?.booksCurr) updates[safeMonth+'.booksCurr'] = d.booksCurr;
+    if(d?.cumul) updates[safeMonth+'.cumul'] = d.cumul;
+    if(d?.wc) updates[safeMonth+'.wc'] = d.wc;
+    const stuSnap = await window._fbGetDoc(stuRef);
+    if(stuSnap.exists()){
+      await window._fbUpdateDoc(stuRef, updates);
+    } else {
+      await window._fbSetDoc(stuRef, {[safeMonth]: {cls2Data}}, {merge:true});
+    }
+  } catch(e){ console.error("fbSaveSecondary error:", e); }
+}
+
+// 메타 데이터만 저장 (students, teachers 등)
+async function fbSaveMeta(){
+  if(!window._fbReady || !window._db) return;
+  try {
+    const metaRef = window._fbDoc(window._db, "bada-data", FB_META_DOC);
+    // students: dot-notation으로 학생별 경로 저장 → 동시 편집 시 충돌 없음
+    const updates = {
+      teachers: JSON.parse(JSON.stringify(teachers)),
+      templates: JSON.parse(JSON.stringify(templates)),
+      loginAccounts: JSON.parse(JSON.stringify(LOGIN_ACCOUNTS)),
+      updatedAt: new Date().toISOString(),
+    };
+    students.forEach(s => {
+      updates["students." + s.id] = JSON.parse(JSON.stringify(s));
+    });
+    const snap = await window._fbGetDoc(metaRef);
+    if(snap.exists()){
+      await window._fbUpdateDoc(metaRef, updates);
+    } else {
+      // 최초 생성: students를 배열로 저장 (fbLoadAll에서 양쪽 처리)
+      await window._fbSetDoc(metaRef, {
+        ...updates,
+        students: JSON.parse(JSON.stringify(students)),
+      });
+    }
+  } catch(e){ console.error("fbSaveMeta error:", e); }
+}
 function scheduleFirebaseSave(){
   if(_fbSaveTimer) clearTimeout(_fbSaveTimer);
-  _fbSaveTimer = setTimeout(()=>{ fbSaveAll(); }, 1500);
+  _fbSaveTimer = setTimeout(()=>{ fbSaveMeta(); }, 1500);
   const ind = document.getElementById("fb-save-indicator");
   if(ind){ ind.textContent="⏳ 저장 중..."; ind.style.color="#8A9BB0"; }
 }
@@ -4967,7 +5061,7 @@ async function fbInitAfterLogin(){
   if(!window._fbReady || !window._db || !window._fbOnSnapshot) return;
   const db = window._db;
   _fbUnsubscribe = window._fbOnSnapshot(
-    window._fbDoc(db, "bada-data", FB_DOC_ID),
+    window._fbDoc(db, "bada-data", FB_META_DOC),
     (snap) => {
       if(!snap.exists()) return;
       const remote = snap.data();
@@ -4978,7 +5072,9 @@ async function fbInitAfterLogin(){
 
       let changed = false;
 
-      if(remote.allData){
+      // meta 문서 변경: students 목록만 동기화
+      // allData는 학생별 독립 문서이므로 충돌 없음 - 실시간 동기화 불필요
+      if(false && remote.allData){  // disabled
         Object.keys(remote.allData).forEach(stuId=>{
           if(!allData[stuId]){ allData[stuId] = {}; changed = true; }
           Object.keys(remote.allData[stuId]).forEach(key=>{
@@ -5460,7 +5556,9 @@ function saveQERow(stuId){
   if(btn){ btn.style.background="var(--teal)"; btn.textContent="✅"; setTimeout(()=>{btn.style.background="var(--primary-dark)";btn.textContent="💾";},1500); }
   if(row && stuCurMonthDone(s)) row.style.background="var(--teal-light)";
 
-  scheduleFirebaseSave();
+  // 학생 데이터 저장 (일괄입력은 항상 탭1 데이터)
+  const qeMonth = document.getElementById("qe-month")?.value||curMonth;
+  fbSavePrimary(stuId, qeMonth);
 }
 
 function saveAllQuickEntry(){
@@ -5474,8 +5572,7 @@ function saveAllQuickEntry(){
   });
   // Save each row (each calls scheduleFirebaseSave with debounce)
   list.forEach(s=>saveQERow(s.id));
-  // Explicit final save after all rows processed
-  scheduleFirebaseSave();
+  // 각 saveQERow에서 fbSavePrimary 호출하므로 별도 저장 불필요
   toast(`${list.length}명 저장 완료 ✅`);
   renderStudents();
 }
