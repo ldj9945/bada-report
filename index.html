@@ -177,7 +177,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, getDoc, updateDoc, deleteDoc, deleteField, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyCv_wrTuOhLQIDKOx_WGEzsW5N-hTicPLY",
@@ -196,6 +196,8 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
     window._fbSetDoc = setDoc;
     window._fbGetDoc = getDoc;
     window._fbUpdateDoc = updateDoc;
+    window._fbDeleteDoc = deleteDoc;
+    window._fbDeleteField = deleteField;
     window._fbDoc = doc;
     window._fbOnSnapshot = onSnapshot;
     window._fbCollection = collection;
@@ -4406,7 +4408,8 @@ function deleteStudent(id){
   renderStudents();
   renderTeacherList();
   toast(`${s.name} 삭제됨`);
-  scheduleFirebaseSave();
+  // Firebase에서 학생 문서 삭제 + meta에서 학생 항목 제거
+  fbDeleteStudent(id);
 }
 
 
@@ -4972,7 +4975,8 @@ async function fbSavePrimary(stuId, month){
       delete initData.cls2Data;
       await window._fbSetDoc(stuRef, {[safeMonth]: initData}, {merge:true});
     }
-  } catch(e){ console.error("fbSavePrimary error:", e); }
+    fbIndicatorSaved();
+  } catch(e){ console.error("fbSavePrimary error:", e); fbIndicatorError(); }
 }
 
 // 탭2(바다코어) cls2Data만 저장 - 탭1 데이터 절대 건드리지 않음
@@ -4998,7 +5002,8 @@ async function fbSaveSecondary(stuId, month){
     } else {
       await window._fbSetDoc(stuRef, {[safeMonth]: {cls2Data}}, {merge:true});
     }
-  } catch(e){ console.error("fbSaveSecondary error:", e); }
+    fbIndicatorSaved();
+  } catch(e){ console.error("fbSaveSecondary error:", e); fbIndicatorError(); }
 }
 
 // 메타 데이터만 저장 (students, teachers 등)
@@ -5026,7 +5031,38 @@ async function fbSaveMeta(){
         students: JSON.parse(JSON.stringify(students)),
       });
     }
-  } catch(e){ console.error("fbSaveMeta error:", e); }
+    fbIndicatorSaved();
+  } catch(e){ console.error("fbSaveMeta error:", e); fbIndicatorError(); }
+}
+
+function fbIndicatorSaved(){
+  const ind = document.getElementById("fb-save-indicator");
+  if(ind){
+    ind.textContent = "✅ 저장됨 " + new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"});
+    ind.style.color = "#1D9E75";
+  }
+}
+function fbIndicatorError(){
+  const ind = document.getElementById("fb-save-indicator");
+  if(ind){ ind.textContent="⚠️ 저장 실패"; ind.style.color="#D4537E"; }
+}
+
+async function fbDeleteStudent(stuId){
+  if(!window._fbReady || !window._db) return;
+  try {
+    const db = window._db;
+    // 학생 데이터 문서 삭제
+    await window._fbDeleteDoc(window._fbDoc(db, "bada-data", FB_STU_PREFIX+stuId));
+    // meta 문서에서 students.{id} 필드 삭제
+    const metaRef = window._fbDoc(db, "bada-data", FB_META_DOC);
+    await window._fbUpdateDoc(metaRef, {
+      ["students."+stuId]: window._fbDeleteField()
+    });
+    fbIndicatorSaved();
+  } catch(e){
+    console.error("fbDeleteStudent error:", e);
+    fbIndicatorError();
+  }
 }
 function scheduleFirebaseSave(){
   if(_fbSaveTimer) clearTimeout(_fbSaveTimer);
